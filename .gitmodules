@@ -1,0 +1,3 @@
+[submodule "ObsidianIRC"]
+	path = ObsidianIRC
+	url = https://github.com/ObsidianIRC/ObsidianIRC.git
