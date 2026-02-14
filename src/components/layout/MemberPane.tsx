@@ -1,7 +1,22 @@
 import { useStore } from '../../store'
-import { THEME, COLORS } from '../../constants/theme'
+import { THEME, COLORS, NICKNAME_COLORS } from '../../constants/theme'
 import { SplitBorder } from '../../constants/borders'
 import type { User } from '../../types'
+
+// Hash function for consistent nickname colors
+const hashString = (str: string): number => {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i)
+    hash = hash & hash
+  }
+  return Math.abs(hash)
+}
+
+const getNicknameColor = (nickname: string): string => {
+  const index = hashString(nickname) % NICKNAME_COLORS.length
+  return NICKNAME_COLORS[index]
+}
 
 interface MemberPaneProps {
   width: number
@@ -34,6 +49,26 @@ export function MemberPane({ width, height, focused }: MemberPaneProps) {
         return '&'
       default:
         return ''
+    }
+  }
+
+  const getModeColor = (user: User) => {
+    if (!user.modes || user.modes.length === 0) return undefined
+
+    const mode = user.modes[0]
+    switch (mode) {
+      case 'q':
+        return THEME.error // Owner - red
+      case 'a':
+        return THEME.accentYellow // Admin - gold
+      case 'o':
+        return THEME.accentGreen // Op - green
+      case 'h':
+        return THEME.accentCyan // Half-op - cyan
+      case 'v':
+        return THEME.accentPurple // Voice - purple
+      default:
+        return undefined
     }
   }
 
@@ -77,8 +112,8 @@ export function MemberPane({ width, height, focused }: MemberPaneProps) {
         width={width}
         height={height}
         {...SplitBorder}
-        borderColor={focused ? THEME.borderActive : THEME.border}
-        backgroundColor={THEME.background}
+        borderColor={focused ? THEME.borderFocus : THEME.border}
+        backgroundColor={THEME.backgroundMembers}
         flexDirection="column"
       >
         <box />
@@ -93,25 +128,39 @@ export function MemberPane({ width, height, focused }: MemberPaneProps) {
       width={width}
       height={height}
       {...SplitBorder}
-      borderColor={focused ? THEME.borderActive : THEME.border}
-      backgroundColor={THEME.background}
+      borderColor={focused ? THEME.borderFocus : THEME.border}
+      backgroundColor={THEME.backgroundMembers}
       flexDirection="column"
     >
-      <scrollbox focused={focused} height={height - 2}>
+      <box
+        height={2}
+        paddingLeft={1}
+        paddingTop={1}
+        backgroundColor={THEME.backgroundHighlight}
+        borderBottom
+        borderColor={THEME.borderSubtle}
+      >
+        <text>
+          <span fg={THEME.mutedText}>Members ({sortedUsers.length})</span>
+        </text>
+      </box>
+      <scrollbox focused={focused} height={height - 4}>
         {sortedUsers.length === 0 ? (
           <box />
         ) : (
           sortedUsers.map((user) => {
             const modeSymbol = getUserModeSymbol(user)
+            const modeColor = getModeColor(user)
             const displayName = user.nickname || user.username
             const isAway = user.isAway
+            const nicknameColor = isAway ? THEME.mutedText : getNicknameColor(displayName)
 
             return (
               <box key={user.id} paddingLeft={1} paddingRight={1}>
-                <text fg={isAway ? THEME.mutedText : THEME.foreground}>
-                  {modeSymbol && <span fg={COLORS.yellow}>{modeSymbol}</span>}
-                  {displayName}
-                  {isAway && <span fg={THEME.inactive}> (away)</span>}
+                <text>
+                  {modeSymbol && <span fg={modeColor}>{modeSymbol}</span>}
+                  <span fg={nicknameColor}>{displayName}</span>
+                  {isAway && <span fg={THEME.dimText}> (away)</span>}
                 </text>
               </box>
             )

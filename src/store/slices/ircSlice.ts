@@ -156,31 +156,45 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
 
     // User part
     ircClient.on('PART', (data: EventMap['PART']) => {
-      const { getServer, updateChannel, addMessage } = get()
+      const { getServer, updateChannel, addMessage, removeChannel, currentChannelId, setCurrentChannel } = get()
       const server = getServer(data.serverId)
       if (!server) return
 
       const channel = server.channels.find((c) => c.name === data.channelName)
       if (!channel) return
 
-      updateChannel(data.serverId, channel.id, {
-        users: channel.users.filter((u) => u.username !== data.username),
-      })
+      // Check if the user who parted is the current user (us)
+      const isCurrentUser = data.username === server.nickname
 
-      // Add system message
-      const message: Message = {
-        id: uuidv4(),
-        type: 'part',
-        content: `${data.username} has left ${data.channelName}${data.reason ? ` (${data.reason})` : ''}`,
-        timestamp: new Date(),
-        userId: data.username,
-        channelId: channel.id,
-        serverId: data.serverId,
-        reactions: [],
-        replyMessage: null,
-        mentioned: [],
+      if (isCurrentUser) {
+        // We left the channel, remove it entirely
+        removeChannel(data.serverId, channel.id)
+
+        // If we were viewing this channel, clear the selection
+        if (currentChannelId === channel.id) {
+          setCurrentChannel(null)
+        }
+      } else {
+        // Someone else left, just remove them from the user list
+        updateChannel(data.serverId, channel.id, {
+          users: channel.users.filter((u) => u.username !== data.username),
+        })
+
+        // Add system message
+        const message: Message = {
+          id: uuidv4(),
+          type: 'part',
+          content: `${data.username} has left ${data.channelName}${data.reason ? ` (${data.reason})` : ''}`,
+          timestamp: new Date(),
+          userId: data.username,
+          channelId: channel.id,
+          serverId: data.serverId,
+          reactions: [],
+          replyMessage: null,
+          mentioned: [],
+        }
+        addMessage(channel.id, message)
       }
-      addMessage(channel.id, message)
     })
 
     // User quit

@@ -47,7 +47,7 @@ export function StatusBar({ width }: StatusBarProps) {
     <box
       width={width}
       height={1}
-      backgroundColor={THEME.background}
+      backgroundColor={THEME.backgroundPanel}
       flexDirection="row"
       justifyContent="space-between"
       paddingLeft={1}
@@ -58,23 +58,32 @@ export function StatusBar({ width }: StatusBarProps) {
           <>
             <text>
               <span fg={getStatusColor()}>{getConnectionStatus()}</span>
-              <span fg={THEME.foreground}> {currentServer.name}</span>
+              <span fg={THEME.accentBlue}> {currentServer.name}</span>
             </text>
           </>
         )}
 
         {currentChannel && (
           <>
-            <text fg={THEME.border}>|</text>
-            <text fg={THEME.accent}>{currentChannel.name}</text>
+            <text fg={THEME.borderSubtle}>│</text>
+            <text>
+              <span fg={THEME.accentPurple}># </span>
+              <span fg={THEME.foreground}>{currentChannel.name}</span>
+            </text>
           </>
         )}
       </box>
 
       <box>
-        <text fg={THEME.mutedText}>
-          <span fg={THEME.accent}>Ctrl+K</span> commands <span fg={THEME.border}>|</span>{' '}
-          <span fg={THEME.accent}>Ctrl+D</span> quit
+        <text>
+          <span fg={THEME.accentCyan}>/help</span>
+          <span fg={THEME.mutedText}> keybindings </span>
+          <span fg={THEME.borderSubtle}>│</span>
+          <span fg={THEME.accentCyan}> Ctrl+K</span>
+          <span fg={THEME.mutedText}> commands </span>
+          <span fg={THEME.borderSubtle}>│</span>
+          <span fg={THEME.accentCyan}> Ctrl+D</span>
+          <span fg={THEME.mutedText}> quit</span>
         </text>
       </box>
     </box>

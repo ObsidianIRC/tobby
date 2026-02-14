@@ -38,6 +38,17 @@ export function registerChannelActions(registry: ActionRegistry<AppStore>) {
         ? channelName
         : `#${channelName}`
 
+      // Check if we're already in this channel
+      const existingChannel = currentServer.channels.find(
+        (c) => c.name.toLowerCase() === normalizedChannelName.toLowerCase()
+      )
+
+      if (existingChannel) {
+        // Already in the channel, just switch to it
+        store.setCurrentChannel(existingChannel.id)
+        return
+      }
+
       // Join the channel using IRC client
       const channel = ircClient.joinChannel(currentServer.id, normalizedChannelName)
 

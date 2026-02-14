@@ -28,6 +28,73 @@ export class CommandParser {
 
   private registerCommands(): void {
     this.register({
+      name: 'help',
+      aliases: ['h', '?'],
+      description: 'Show help information',
+      usage: '/help',
+      minArgs: 0,
+      execute: async (_, ctx) => {
+        const helpLines = [
+          '══════════════════════════════════════════════════════════',
+          '           ObbyTTY IRC Client - Help                     ',
+          '══════════════════════════════════════════════════════════',
+          '',
+          'INPUT:',
+          '  • Paste: Cmd+V (Mac) or Ctrl+Shift+V (Linux)',
+          '  • Tab         Complete /commands',
+          '  • Up/Down     Navigate command history',
+          '',
+          'EMACS KEYBINDINGS (built-in):',
+          '  • Ctrl+A / Ctrl+E    Move to start/end of line',
+          '  • Ctrl+F / Ctrl+B    Move forward/backward one char',
+          '  • Ctrl+U / Ctrl+K    Delete to start/end of line',
+          '  • Ctrl+W             Delete word backward',
+          '  • Alt+← / Alt+→      Move by word',
+          '  • Alt+Backspace      Delete word backward',
+          '',
+          'IRC COMMANDS:',
+          '  • /connect <host> <port> <nick>  Connect to server',
+          '  • /join #channel                 Join channel',
+          '  • /part [#channel]               Leave channel',
+          '  • /msg <nick> <text>             Private message',
+          '  • /nick <newnick>                Change nickname',
+          '  • /topic [new topic]             Get/set topic',
+          '  • /whois <nick>                  User info',
+          '  • /away [message]                Set/clear away',
+          '  • /quit [reason]                 Quit',
+          '',
+          'SHORTCUTS:',
+          '  • Ctrl+K    Quick actions menu',
+          '  • Ctrl+H    Toggle server pane',
+          '  • Ctrl+L    Toggle member pane',
+          '  • Ctrl+D    Quit application',
+          '══════════════════════════════════════════════════════════',
+        ]
+
+        // Add each help line as a system message
+        if (ctx.currentChannel) {
+          const { addMessage } = ctx.store
+          for (const line of helpLines) {
+            addMessage(ctx.currentChannel.id, {
+              id: `help-${Date.now()}-${Math.random()}`,
+              type: 'system',
+              content: line,
+              timestamp: new Date(),
+              userId: 'system',
+              channelId: ctx.currentChannel.id,
+              serverId: ctx.currentServer!.id,
+              reactions: [],
+              replyMessage: null,
+              mentioned: [],
+            })
+          }
+        }
+
+        return { success: true, message: 'Help displayed in chat' }
+      },
+    })
+
+    this.register({
       name: 'connect',
       aliases: ['server'],
       description: 'Connect to an IRC server',

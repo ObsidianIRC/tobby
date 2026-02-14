@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useKeyboard } from '@opentui/react'
 import { useAppContext } from '../../context/AppContext'
 import { useStore } from '../../store'
 import { CommandParser } from '../../services/commands'
-import { handleEmacsKeybindings } from '../../hooks/useEmacsKeybindings'
 import { THEME } from '../../constants/theme'
 
 interface CommandInputProps {
@@ -18,6 +17,10 @@ export function CommandInput({ width }: CommandInputProps) {
   const [historyIndex, setHistoryIndex] = useState(-1)
   const [errorMessage, setErrorMessage] = useState('')
   const [completionIndex, setCompletionIndex] = useState(-1)
+
+  // Track whether a programmatic update is in progress to avoid
+  // handleChange resetting completionIndex/historyIndex
+  const programmaticUpdate = useRef(false)
 
   const { registry, ircClient, renderer } = useAppContext()
   const currentServerId = useStore((state) => state.currentServerId)
@@ -41,32 +44,31 @@ export function CommandInput({ width }: CommandInputProps) {
 
   const getCompletions = (text: string): string[] => {
     if (!text.startsWith('/')) return []
-
     const commandPart = text.slice(1).toLowerCase()
     if (!commandPart) return COMMANDS.map((cmd) => `/${cmd}`)
-
     return COMMANDS.filter((cmd) => cmd.startsWith(commandPart)).map((cmd) => `/${cmd}`)
   }
 
   const handleTabCompletion = () => {
-    if (input.startsWith('/')) {
-      const matches = getCompletions(input)
+    if (!input.startsWith('/')) return
 
-      if (matches.length === 0) return
+    const matches = getCompletions(input)
+    if (matches.length === 0) return
 
-      if (completionIndex === -1) {
-        setCompletionIndex(0)
-        setInput(matches[0] + ' ')
-      } else {
-        const nextIndex = (completionIndex + 1) % matches.length
-        setCompletionIndex(nextIndex)
-        setInput(matches[nextIndex] + ' ')
-      }
+    programmaticUpdate.current = true
+    if (completionIndex === -1) {
+      setCompletionIndex(0)
+      setInput(matches[0] + ' ')
+    } else {
+      const nextIndex = (completionIndex + 1) % matches.length
+      setCompletionIndex(nextIndex)
+      setInput(matches[nextIndex] + ' ')
     }
   }
 
-  const handleSubmit = async () => {
-    if (!input.trim()) return
+  const handleSubmit = async (value: string) => {
+    const text = value.trim()
+    if (!text) return
 
     setErrorMessage('')
     setCompletionIndex(-1)
@@ -80,56 +82,50 @@ export function CommandInput({ width }: CommandInputProps) {
     }
 
     try {
-      const result = await commandParser.parse(input, context)
+      const result = await commandParser.parse(text, context)
 
       if (!result.success) {
         setErrorMessage(result.message || 'Command failed')
-        setTimeout(() => setErrorMessage(''), 3000)
         return
       }
 
-      setCommandHistory((prev) => [...prev, input])
+      setCommandHistory((prev) => [...prev, text])
       setHistoryIndex(-1)
+      programmaticUpdate.current = true
       setInput('')
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Command failed')
-      setTimeout(() => setErrorMessage(''), 3000)
     }
   }
 
+  // Intercept tab, up, down — prevent <input> from processing them
   useKeyboard((key) => {
-    const emacsHandled = handleEmacsKeybindings(key, {
-      input,
-      setInput,
-    })
-
-    if (emacsHandled) {
-      setHistoryIndex(-1)
-      setCompletionIndex(-1)
+    if (key.name === 'tab') {
+      key.preventDefault()
+      handleTabCompletion()
       return
     }
 
-    if (key.name === 'return') {
-      if (key.shift) {
-        setInput((prev) => prev + '\n')
-      } else {
-        handleSubmit()
-      }
-    } else if (key.name === 'tab') {
-      handleTabCompletion()
-    } else if (key.name === 'up') {
+    if (key.name === 'up') {
+      key.preventDefault()
       if (commandHistory.length > 0) {
         const newIndex =
           historyIndex === -1 ? commandHistory.length - 1 : Math.max(0, historyIndex - 1)
         setHistoryIndex(newIndex)
         const historyItem = commandHistory[newIndex]
         if (historyItem !== undefined) {
+          programmaticUpdate.current = true
           setInput(historyItem)
         }
       }
-    } else if (key.name === 'down') {
+      return
+    }
+
+    if (key.name === 'down') {
+      key.preventDefault()
       if (historyIndex !== -1) {
         const newIndex = historyIndex + 1
+        programmaticUpdate.current = true
         if (newIndex >= commandHistory.length) {
           setHistoryIndex(-1)
           setInput('')
@@ -141,16 +137,19 @@ export function CommandInput({ width }: CommandInputProps) {
           }
         }
       }
-    } else if (key.name === 'backspace') {
-      setInput((prev) => prev.slice(0, -1))
-      setHistoryIndex(-1)
-      setCompletionIndex(-1)
-    } else if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
-      setInput((prev) => prev + key.sequence)
-      setHistoryIndex(-1)
-      setCompletionIndex(-1)
+      return
     }
   })
+
+  const handleInput = (value: string) => {
+    if (programmaticUpdate.current) {
+      programmaticUpdate.current = false
+      return
+    }
+    setInput(value)
+    setHistoryIndex(-1)
+    setCompletionIndex(-1)
+  }
 
   useEffect(() => {
     if (errorMessage) {
@@ -159,25 +158,41 @@ export function CommandInput({ width }: CommandInputProps) {
     }
   }, [errorMessage])
 
+  const prompt = getPrompt()
+  const promptWidth = prompt.length
+
   return (
     <box width={width} height={errorMessage ? 4 : 3} flexDirection="column">
       <box
         height={2}
         border={['top']}
         borderStyle="single"
-        borderColor={THEME.border}
+        borderColor={THEME.borderActive}
         paddingLeft={1}
-        backgroundColor={THEME.backgroundPanel}
+        backgroundColor={THEME.backgroundInput}
+        flexDirection="row"
       >
-        <text>
-          <span fg={THEME.accent}>{getPrompt()}</span>
-          <span fg={THEME.foreground}>{input}</span>
-          <span fg={THEME.accent}>█</span>
-        </text>
+        <box width={promptWidth} flexShrink={0} height={1}>
+          <text>
+            <span fg={THEME.accentBlue}>{prompt}</span>
+          </text>
+        </box>
+        <input
+          focused
+          value={input}
+          onInput={handleInput}
+          onSubmit={handleSubmit}
+          placeholder="Type a message or /command..."
+          flexGrow={1}
+          backgroundColor={THEME.backgroundInput}
+          focusedBackgroundColor={THEME.backgroundInput}
+        />
       </box>
       {errorMessage && (
-        <box height={1} paddingLeft={1} backgroundColor={THEME.backgroundPanel}>
-          <text fg={THEME.error}>{errorMessage}</text>
+        <box height={1} paddingLeft={1} backgroundColor={THEME.backgroundInput}>
+          <text>
+            <span fg={THEME.error}>⚠ {errorMessage}</span>
+          </text>
         </box>
       )}
     </box>

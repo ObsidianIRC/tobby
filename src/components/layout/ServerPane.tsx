@@ -51,9 +51,9 @@ export function ServerPane({ width, height, focused }: ServerPaneProps) {
       width={width}
       height={height}
       {...SplitBorderRight}
-      borderColor={focused ? THEME.borderActive : THEME.border}
+      borderColor={focused ? THEME.borderFocus : THEME.border}
       flexDirection="column"
-      backgroundColor={THEME.background}
+      backgroundColor={THEME.backgroundServer}
       overflow="scroll"
     >
       <scrollbox focused={focused} height={height - 2}>
@@ -61,7 +61,7 @@ export function ServerPane({ width, height, focused }: ServerPaneProps) {
           <box />
         ) : (
           servers.map((server) => (
-            <box key={server.id} flexDirection="column" marginBottom={1}>
+            <box key={server.id} flexDirection="column" marginBottom={2}>
               <box
                 flexDirection="row"
                 gap={1}
@@ -70,17 +70,16 @@ export function ServerPane({ width, height, focused }: ServerPaneProps) {
                 paddingTop={1}
                 paddingBottom={1}
                 backgroundColor={
-                  currentServerId === server.id ? THEME.highlightBackground : undefined
+                  currentServerId === server.id ? THEME.backgroundHighlight : undefined
                 }
                 onMouseDown={() => {
                   setCurrentServer(server.id)
-                  // Optional: clear current channel if selecting server root
                   setCurrentChannel(null)
                 }}
               >
-                <text fg={getConnectionColor(server)}>{getConnectionIcon(server)}</text>
-                <text fg={THEME.foreground}>
-                  <strong>{server.name}</strong>
+                <text>
+                  <span fg={getConnectionColor(server)}>{getConnectionIcon(server)}</span>
+                  <span fg={THEME.accentBlue}> {server.name}</span>
                 </text>
               </box>
 
@@ -88,19 +87,22 @@ export function ServerPane({ width, height, focused }: ServerPaneProps) {
                 <box
                   key={channel.id}
                   paddingLeft={3}
-                  paddingTop={1}
-                  paddingBottom={1}
                   backgroundColor={
                     currentChannelId === channel.id ? THEME.selectedBackground : undefined
                   }
                   onMouseDown={() => handleSelectChannel(server.id, channel.id)}
                 >
-                  <text fg={THEME.foreground}>
-                    {channel.isMentioned && <span fg={THEME.error}>! </span>}
-                    {channel.unreadCount > 0 && (
-                      <span fg={THEME.warning}>({channel.unreadCount}) </span>
+                  <text>
+                    {channel.isMentioned && <span fg={THEME.error}>● </span>}
+                    {!channel.isMentioned && channel.unreadCount > 0 && (
+                      <span fg={THEME.accentGreen}>● </span>
                     )}
-                    {channel.name}
+                    <span fg={currentChannelId === channel.id ? THEME.accentBlue : THEME.foreground}>
+                      {channel.name}
+                    </span>
+                    {channel.unreadCount > 0 && (
+                      <span fg={THEME.mutedText}> ({channel.unreadCount})</span>
+                    )}
                   </text>
                 </box>
               ))}
@@ -109,17 +111,23 @@ export function ServerPane({ width, height, focused }: ServerPaneProps) {
                 <box
                   key={chat.id}
                   paddingLeft={3}
-                  paddingTop={1}
-                  paddingBottom={1}
                   backgroundColor={
                     currentChannelId === chat.id ? THEME.selectedBackground : undefined
                   }
                   onMouseDown={() => handleSelectChannel(server.id, chat.id)}
                 >
-                  <text fg={THEME.foreground}>
-                    {chat.isMentioned && <span fg={THEME.error}>! </span>}
-                    {chat.unreadCount > 0 && <span fg={THEME.warning}>({chat.unreadCount}) </span>}@
-                    {chat.username}
+                  <text>
+                    {chat.isMentioned && <span fg={THEME.error}>● </span>}
+                    {!chat.isMentioned && chat.unreadCount > 0 && (
+                      <span fg={THEME.accentGreen}>● </span>
+                    )}
+                    <span fg={THEME.accentPink}>@ </span>
+                    <span fg={currentChannelId === chat.id ? THEME.accentBlue : THEME.foreground}>
+                      {chat.username}
+                    </span>
+                    {chat.unreadCount > 0 && (
+                      <span fg={THEME.mutedText}> ({chat.unreadCount})</span>
+                    )}
                   </text>
                 </box>
               ))}

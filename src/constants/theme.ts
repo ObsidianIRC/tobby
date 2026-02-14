@@ -1,53 +1,92 @@
-// OpenCode-inspired theme with subtle, professional colors
+// OpenCode-inspired theme with rich, vibrant colors
 export const THEME = {
-  // Base backgrounds - step-based grays from OpenCode
-  background: '#0a0a0a', // darkStep1 - deepest background
-  backgroundPanel: '#141414', // darkStep2 - panel backgrounds
-  backgroundElement: '#1e1e1e', // darkStep3 - elevated elements
+  // Base backgrounds - rich gradients
+  background: '#0d1117', // Deep blue-black
+  backgroundPanel: '#161b22', // Slightly lighter panel
+  backgroundElement: '#1c2128', // Elevated elements
+  backgroundInput: '#0d1117', // Input area
+
+  // Rich accent backgrounds
+  backgroundServer: '#1a1f26', // Server pane
+  backgroundChat: '#0d1117', // Chat area
+  backgroundMembers: '#1a1f26', // Member list
+  backgroundHighlight: '#1f2937', // Highlighted items
+  backgroundMention: '#3d1f1f', // Mention background (dark red tint)
 
   // Text colors
-  foreground: '#eeeeee', // darkStep12 - primary text
-  mutedText: '#808080', // darkStep11 - secondary text
+  foreground: '#e6edf3', // Bright white text
+  mutedText: '#7d8590', // Muted gray
+  dimText: '#484f58', // Very dim
 
-  // Borders - very subtle
-  border: '#484848', // darkStep7 - subtle borders
-  borderActive: '#606060', // darkStep8 - active borders
-  borderSubtle: '#3c3c3c', // darkStep6 - barely visible borders
+  // Borders - clearly visible with color
+  border: '#30363d', // Subtle gray border
+  borderActive: '#58a6ff', // Blue active border
+  borderFocus: '#58a6ff', // Blue focus border
+  borderSubtle: '#21262d', // Very subtle
 
-  // Accent colors - soft and desaturated like OpenCode
-  accent: '#fab283', // soft peach - primary accent
-  accentHover: '#ffc09f', // slightly lighter peach
-  secondary: '#5c9cf5', // desaturated blue
-  tertiary: '#9d7cd8', // soft purple
+  // Rich accent colors palette
+  accent: '#ff7b72', // Coral red - primary
+  accentHover: '#ffa198', // Lighter coral
+  accentBlue: '#58a6ff', // Bright blue
+  accentPurple: '#bc8cff', // Bright purple
+  accentGreen: '#56d364', // Bright green
+  accentYellow: '#d29922', // Gold
+  accentPink: '#ff9bce', // Pink
+  accentCyan: '#76e3ea', // Cyan
 
-  // Status colors - IRC specific but using OpenCode palette
-  error: '#e06c75', // soft red
-  success: '#7fd88f', // soft green
-  warning: '#f5a742', // soft orange
-  info: '#56b6c2', // soft cyan
+  // Status colors - vibrant
+  error: '#f85149', // Bright red
+  success: '#3fb950', // Bright green
+  warning: '#d29922', // Gold/orange
+  info: '#58a6ff', // Bright blue
 
   // UI states
-  highlight: '#1e1e1e', // darkStep3
-  highlightBackground: '#282828', // darkStep4
-  selectedBackground: '#323232', // darkStep5
+  highlight: '#1f2937',
+  highlightBackground: '#2d333b',
+  selectedBackground: '#1f6feb22', // Blue tint
 
   // IRC specific
-  mention: '#e06c75', // soft red for mentions
-  active: '#fab283', // soft peach for active items
-  inactive: '#3c3c3c', // darkStep6 for inactive
+  mention: '#f85149',
+  active: '#ff7b72',
+  inactive: '#30363d',
 } as const
 
-// IRC-specific semantic colors (using OpenCode palette)
+// IRC-specific semantic colors - vibrant palette
 export const COLORS = {
-  gray: '#808080', // darkStep11
-  lightGray: '#eeeeee', // darkStep12
-  blue: '#5c9cf5', // desaturated blue
-  cyan: '#56b6c2', // soft cyan
-  green: '#7fd88f', // soft green
-  yellow: '#e5c07b', // soft yellow
-  orange: '#f5a742', // soft orange
-  red: '#e06c75', // soft red
-  magenta: '#9d7cd8', // soft purple
-  white: '#eeeeee', // darkStep12
-  peach: '#fab283', // soft peach (OpenCode primary)
+  gray: '#7d8590',
+  lightGray: '#e6edf3',
+  blue: '#58a6ff',
+  cyan: '#76e3ea',
+  green: '#56d364',
+  yellow: '#d29922',
+  orange: '#ff9500',
+  red: '#f85149',
+  magenta: '#d2a8ff',
+  purple: '#bc8cff',
+  pink: '#ff9bce',
+  white: '#ffffff',
+  coral: '#ff7b72',
+  lavender: '#c69cff',
+  mint: '#7ee787',
+  gold: '#f0cf65',
 } as const
+
+// Nickname color palette - 16 distinct colors for username variety
+export const NICKNAME_COLORS = [
+  '#58a6ff', // Blue
+  '#3fb950', // Green
+  '#d29922', // Gold
+  '#f85149', // Red
+  '#bc8cff', // Purple
+  '#ff9bce', // Pink
+  '#76e3ea', // Cyan
+  '#ff9500', // Orange
+  '#56d364', // Lime
+  '#d2a8ff', // Lavender
+  '#ffa198', // Coral
+  '#7ee787', // Mint
+  '#f0cf65', // Light gold
+  '#a0d0ff', // Sky blue
+  '#ff8f96', // Rose
+  '#96d0ff', // Ice blue
+] as const
