@@ -71,7 +71,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
             <span fg={THEME.dimText}>[{timestamp}]</span>
             <span fg={nicknameColor}> {username}</span>
             <span fg={THEME.mutedText}> › </span>
-            <span fg={THEME.foreground}>{renderIrcText(msg.content, msg.id)}</span>
+            <span fg={THEME.foreground}>{renderIrcText(msg.content, msg.id, currentServer?.nickname)}</span>
           </text>
         )
       case 'action':

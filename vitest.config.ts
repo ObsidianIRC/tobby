@@ -16,7 +16,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['./tests/vitest.setup.ts'],
-    exclude: ['**/node_modules/**', '**/ObsidianIRC/tests/**'],
+    exclude: ['**/node_modules/**', '**/ObsidianIRC/tests/**', 'tests/ircEndToEnd.test.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

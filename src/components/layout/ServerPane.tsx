@@ -68,7 +68,6 @@ export function ServerPane({ width, height, focused }: ServerPaneProps) {
                 paddingLeft={1}
                 paddingRight={1}
                 paddingTop={1}
-                paddingBottom={1}
                 backgroundColor={
                   currentServerId === server.id ? THEME.backgroundHighlight : undefined
                 }
@@ -93,11 +92,7 @@ export function ServerPane({ width, height, focused }: ServerPaneProps) {
                   onMouseDown={() => handleSelectChannel(server.id, channel.id)}
                 >
                   <text>
-                    {channel.isMentioned && <span fg={THEME.error}>● </span>}
-                    {!channel.isMentioned && channel.unreadCount > 0 && (
-                      <span fg={THEME.accentGreen}>● </span>
-                    )}
-                    <span fg={currentChannelId === channel.id ? THEME.accentBlue : THEME.foreground}>
+                    <span fg={channel.isMentioned ? THEME.error : currentChannelId === channel.id ? THEME.accentBlue : THEME.foreground}>
                       {channel.name}
                     </span>
                     {channel.unreadCount > 0 && (
@@ -117,10 +112,6 @@ export function ServerPane({ width, height, focused }: ServerPaneProps) {
                   onMouseDown={() => handleSelectChannel(server.id, chat.id)}
                 >
                   <text>
-                    {chat.isMentioned && <span fg={THEME.error}>● </span>}
-                    {!chat.isMentioned && chat.unreadCount > 0 && (
-                      <span fg={THEME.accentGreen}>● </span>
-                    )}
                     <span fg={THEME.accentPink}>@ </span>
                     <span fg={currentChannelId === chat.id ? THEME.accentBlue : THEME.foreground}>
                       {chat.username}

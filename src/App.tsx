@@ -54,11 +54,13 @@ export function App() {
   useKeyboard((key) => {
     if (key.name === 'd' && key.ctrl) {
       renderer.destroy()
+      process.exit(0)
       return
     }
 
     if (key.name === 'escape' && key.ctrl) {
       renderer.destroy()
+      process.exit(0)
       return
     }
 

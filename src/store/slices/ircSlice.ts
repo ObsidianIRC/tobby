@@ -4,6 +4,15 @@ import type { AppStore } from '@/store'
 import type { Message, User } from '@/types'
 import { v4 as uuidv4 } from 'uuid'
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function nickMentioned(text: string, nickname: string): boolean {
+  const pattern = new RegExp(`\\b${escapeRegExp(nickname)}\\b`, 'i')
+  return pattern.test(text)
+}
+
 export interface IRCSlice {
   ircClient: IRCClient | null
   initializeIRC: () => void
@@ -69,12 +78,18 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
 
       addMessage(channel.id, message)
 
-      // Increment unread count if channel is not focused
-      const { focusedChannel } = get()
-      if (focusedChannel !== channel.id) {
+      const { currentChannelId } = get()
+      const mentioned = nickMentioned(data.message, server.nickname)
+
+      if (currentChannelId !== channel.id) {
         updateChannel(data.serverId, channel.id, {
           unreadCount: channel.unreadCount + 1,
+          ...(mentioned && { isMentioned: true }),
         })
+      }
+
+      if (mentioned) {
+        process.stdout.write('\x07')
       }
     })
 
@@ -376,6 +391,21 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       }
 
       addMessage(channel.id, message)
+
+      const { currentChannelId, updateChannel } = get()
+      const fullText = data.lines.join('\n')
+      const mentioned = nickMentioned(fullText, server.nickname)
+
+      if (currentChannelId !== channel.id) {
+        updateChannel(data.serverId, channel.id, {
+          unreadCount: channel.unreadCount + 1,
+          ...(mentioned && { isMentioned: true }),
+        })
+      }
+
+      if (mentioned) {
+        process.stdout.write('\x07')
+      }
     })
 
     // Mode change

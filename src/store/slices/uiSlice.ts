@@ -1,5 +1,6 @@
 import type { Message, UIState } from '@/types'
 import type { StateCreator } from 'zustand'
+import type { AppStore } from '@/store'
 
 export interface UISlice extends UIState {
   openModal: (modalId: string) => void
@@ -15,7 +16,7 @@ export interface UISlice extends UIState {
   setCurrentChannel: (channelId: string | null) => void
 }
 
-export const createUISlice: StateCreator<UISlice> = (set) => ({
+export const createUISlice: StateCreator<AppStore, [], [], UISlice> = (set, get) => ({
   activeModal: null,
   focusedPane: 'chat',
   focusedChannel: null,
@@ -38,5 +39,17 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
   setReplyingTo: (message) => set({ replyingTo: message }),
   setTerminalDimensions: (width, height) => set({ terminalWidth: width, terminalHeight: height }),
   setCurrentServer: (serverId) => set({ currentServerId: serverId }),
-  setCurrentChannel: (channelId) => set({ currentChannelId: channelId }),
+  setCurrentChannel: (channelId) => {
+    set({ currentChannelId: channelId })
+    if (channelId) {
+      const { servers, updateChannel } = get()
+      for (const server of servers) {
+        const channel = server.channels.find((c) => c.id === channelId)
+        if (channel) {
+          updateChannel(server.id, channelId, { unreadCount: 0, isMentioned: false })
+          break
+        }
+      }
+    }
+  },
 })

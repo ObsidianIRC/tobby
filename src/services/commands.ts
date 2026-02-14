@@ -220,6 +220,7 @@ export class CommandParser {
           ctx.ircClient.sendRaw(ctx.currentServer.id, `QUIT :${reason}`)
         }
         ctx.renderer.destroy()
+        process.exit(0)
         return { success: true, message: 'Quitting...' }
       },
     })

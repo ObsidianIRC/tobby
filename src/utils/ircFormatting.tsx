@@ -2,6 +2,7 @@ import React from 'react'
 import { TextAttributes } from '@opentui/core'
 import { ircColors } from '@irc/ircUtils'
 import { stripIrcFormatting } from '@irc/messageFormatter'
+import { THEME } from '../constants/theme'
 
 export { stripIrcFormatting }
 
@@ -91,33 +92,64 @@ export function parseIrcFormatting(text: string): IrcSegment[] {
   return segments
 }
 
-export function renderIrcText(text: string, keyPrefix?: string): React.ReactNode {
+function splitOnNick(text: string, nickname: string): { text: string; isNick: boolean }[] {
+  const pattern = new RegExp(`(\\b${nickname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b)`, 'gi')
+  const parts = text.split(pattern)
+  return parts
+    .filter((p) => p !== '')
+    .map((p) => ({ text: p, isNick: pattern.test(p) || p.toLowerCase() === nickname.toLowerCase() }))
+}
+
+export function renderIrcText(text: string, keyPrefix?: string, nickname?: string): React.ReactNode {
   const segments = parseIrcFormatting(text)
 
   if (segments.length === 0) return ''
-  if (segments.length === 1) {
+  if (segments.length === 1 && !nickname) {
     const seg = segments[0]
     if (!seg.fg && !seg.bg && !seg.bold && !seg.italic && !seg.underline && !seg.strikethrough) {
       return seg.text
     }
   }
 
-  return segments.map((seg, i) => {
+  const elements: React.ReactNode[] = []
+  let key = 0
+
+  for (const seg of segments) {
     let attrs = TextAttributes.NONE
     if (seg.bold) attrs |= TextAttributes.BOLD
     if (seg.italic) attrs |= TextAttributes.ITALIC
     if (seg.underline) attrs |= TextAttributes.UNDERLINE
     if (seg.strikethrough) attrs |= TextAttributes.STRIKETHROUGH
 
-    return (
-      <span
-        key={keyPrefix ? `${keyPrefix}-${i}` : i}
-        fg={seg.fg}
-        bg={seg.bg}
-        attributes={attrs || undefined}
-      >
-        {seg.text}
-      </span>
-    )
-  })
+    if (nickname) {
+      const parts = splitOnNick(seg.text, nickname)
+      for (const part of parts) {
+        const k = keyPrefix ? `${keyPrefix}-${key}` : key
+        key++
+        if (part.isNick) {
+          elements.push(
+            <span key={k} fg={THEME.mention} bg={THEME.backgroundMention} attributes={attrs || undefined}>
+              {part.text}
+            </span>
+          )
+        } else {
+          elements.push(
+            <span key={k} fg={seg.fg} bg={seg.bg} attributes={attrs || undefined}>
+              {part.text}
+            </span>
+          )
+        }
+      }
+    } else {
+      const k = keyPrefix ? `${keyPrefix}-${key}` : key
+      key++
+      elements.push(
+        <span key={k} fg={seg.fg} bg={seg.bg} attributes={attrs || undefined}>
+          {seg.text}
+        </span>
+      )
+    }
+  }
+
+  return elements
 }
