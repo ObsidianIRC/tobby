@@ -92,7 +92,15 @@ export function ServerPane({ width, height, focused }: ServerPaneProps) {
                   onMouseDown={() => handleSelectChannel(server.id, channel.id)}
                 >
                   <text>
-                    <span fg={channel.isMentioned ? THEME.error : currentChannelId === channel.id ? THEME.accentBlue : THEME.foreground}>
+                    <span
+                      fg={
+                        channel.isMentioned
+                          ? THEME.error
+                          : currentChannelId === channel.id
+                            ? THEME.accentBlue
+                            : THEME.foreground
+                      }
+                    >
                       {channel.name}
                     </span>
                     {channel.unreadCount > 0 && (

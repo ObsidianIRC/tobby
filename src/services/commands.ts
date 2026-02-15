@@ -1,3 +1,4 @@
+import { v4 as uuidv4 } from 'uuid'
 import type { ActionRegistry } from '@/actions'
 import type { ActionContext } from '@/types'
 import type { AppStore } from '@/store'
@@ -65,7 +66,6 @@ export class CommandParser {
           '',
           'SHORTCUTS:',
           '  • Ctrl+K    Quick actions menu',
-          '  • Ctrl+H    Toggle server pane',
           '  • Ctrl+L    Toggle member pane',
           '  • Ctrl+D    Quit application',
           '══════════════════════════════════════════════════════════',
@@ -169,7 +169,51 @@ export class CommandParser {
       minArgs: 1,
       execute: async (args, ctx) => {
         const action = args.join(' ')
-        await this.registry.execute('message.send', ctx, `\u0001ACTION ${action}\u0001`)
+        const { ircClient, currentServer, currentChannel } = ctx
+        if (!ircClient || !currentServer) {
+          return { success: false, message: 'Not connected to a server' }
+        }
+
+        const privateChat = currentServer.privateChats.find(
+          (pc) => pc.id === ctx.store.currentChannelId
+        )
+
+        if (privateChat) {
+          ircClient.sendRaw(
+            currentServer.id,
+            `PRIVMSG ${privateChat.username} :\u0001ACTION ${action}\u0001`
+          )
+          ctx.store.addMessage(privateChat.id, {
+            id: uuidv4(),
+            type: 'action',
+            content: action,
+            timestamp: new Date(),
+            userId: currentServer.nickname,
+            channelId: privateChat.id,
+            serverId: currentServer.id,
+            reactions: [],
+            replyMessage: null,
+            mentioned: [],
+          })
+          return { success: true }
+        }
+
+        if (!currentChannel) {
+          return { success: false, message: 'No channel selected' }
+        }
+        ircClient.sendMessage(currentServer.id, currentChannel.id, `\u0001ACTION ${action}\u0001`)
+        ctx.store.addMessage(currentChannel.id, {
+          id: uuidv4(),
+          type: 'action',
+          content: action,
+          timestamp: new Date(),
+          userId: currentServer.nickname,
+          channelId: currentChannel.id,
+          serverId: currentServer.id,
+          reactions: [],
+          replyMessage: null,
+          mentioned: [],
+        })
         return { success: true }
       },
     })
@@ -277,8 +321,8 @@ export class CommandParser {
     const trimmed = input.trim()
 
     if (!trimmed.startsWith('/')) {
-      if (!context.currentChannel || !context.currentServer) {
-        return { success: false, message: 'No channel selected' }
+      if (!context.currentServer) {
+        return { success: false, message: 'No server connected' }
       }
       await this.registry.execute('message.send', context, trimmed)
       return { success: true }

@@ -31,7 +31,7 @@ class ConfigService {
       const parsed = JSON.parse(content) as AppConfig
       this.config = { ...DEFAULT_CONFIG, ...parsed }
       this.loaded = true
-    } catch (error) {
+    } catch {
       this.config = DEFAULT_CONFIG
       this.loaded = true
       await this.save()
@@ -42,7 +42,7 @@ class ConfigService {
 
   async save(): Promise<void> {
     await this.ensureConfigDir()
-    
+
     try {
       await fs.writeFile(CONFIG_FILE, JSON.stringify(this.config, null, 2), 'utf-8')
     } catch (error) {
@@ -78,7 +78,7 @@ class ConfigService {
             autoJoin: updates.autoJoin ?? s.autoJoin,
             sasl: updates.sasl ?? s.sasl,
           }
-        : s,
+        : s
     )
     await this.save()
   }

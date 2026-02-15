@@ -13,10 +13,7 @@ export function getDataPath(): string {
       dataPath = path.join(home, 'Library', 'Application Support', 'ObbyTTY')
       break
     case 'win32': // Windows
-      dataPath = path.join(
-        process.env.APPDATA || path.join(home, 'AppData', 'Roaming'),
-        'ObbyTTY'
-      )
+      dataPath = path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'ObbyTTY')
       break
     default: // Linux and others
       dataPath = path.join(

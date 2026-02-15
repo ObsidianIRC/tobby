@@ -1,7 +1,6 @@
 import { MacOSScrollAccel } from '@opentui/core'
 import { useStore } from '../../store'
 import { THEME, COLORS, NICKNAME_COLORS } from '../../constants/theme'
-import { SplitBorder } from '../../constants/borders'
 import { renderIrcText } from '../../utils/ircFormatting'
 import type { Message } from '../../types'
 
@@ -19,7 +18,7 @@ const hashString = (str: string): number => {
 
 const getNicknameColor = (nickname: string): string => {
   const index = hashString(nickname) % NICKNAME_COLORS.length
-  return NICKNAME_COLORS[index]
+  return NICKNAME_COLORS[index] ?? THEME.foreground
 }
 
 interface ChatPaneProps {
@@ -36,10 +35,17 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
 
   const currentServer = servers.find((s) => s.id === currentServerId)
   const currentChannel = currentServer?.channels.find((c) => c.id === currentChannelId)
+  const currentPrivateChat = currentServer?.privateChats.find((pc) => pc.id === currentChannelId)
 
-  const allMessages = currentChannelId ? (messages.get(currentChannelId) ?? []) : []
+  const activeView = currentChannel || currentPrivateChat
+  const isServerView = !activeView && !!currentServerId
+  const allMessages = currentChannelId
+    ? (messages.get(currentChannelId) ?? [])
+    : isServerView
+      ? (messages.get(currentServerId!) ?? [])
+      : []
 
-  const channelHeaderHeight = currentChannel ? 2 : 0
+  const channelHeaderHeight = activeView || isServerView ? 2 : 0
   const topicHeight = currentChannel?.topic ? 2 : 0
   const messagesHeight = height - channelHeaderHeight - topicHeight - 2
 
@@ -71,7 +77,9 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
             <span fg={THEME.dimText}>[{timestamp}]</span>
             <span fg={nicknameColor}> {username}</span>
             <span fg={THEME.mutedText}> › </span>
-            <span fg={THEME.foreground}>{renderIrcText(msg.content, msg.id, currentServer?.nickname)}</span>
+            <span fg={THEME.foreground}>
+              {renderIrcText(msg.content, msg.id, currentServer?.nickname)}
+            </span>
           </text>
         )
       case 'action':
@@ -168,8 +176,6 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
     <box
       width={width}
       height={height}
-      {...SplitBorder}
-      borderColor={focused ? THEME.borderFocus : THEME.border}
       flexDirection="column"
       backgroundColor={THEME.backgroundChat}
     >
@@ -179,7 +185,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
           paddingLeft={1}
           paddingTop={1}
           backgroundColor={THEME.backgroundHighlight}
-          borderBottom
+          border={['bottom']}
           borderColor={THEME.borderSubtle}
         >
           <text>
@@ -191,13 +197,44 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
           </text>
         </box>
       )}
+      {!currentChannel && currentPrivateChat && (
+        <box
+          height={2}
+          paddingLeft={1}
+          paddingTop={1}
+          backgroundColor={THEME.backgroundHighlight}
+          border={['bottom']}
+          borderColor={THEME.borderSubtle}
+        >
+          <text>
+            <span fg={THEME.accentPink}>@ </span>
+            <span fg={THEME.foreground}>{currentPrivateChat.username}</span>
+          </text>
+        </box>
+      )}
+      {isServerView && currentServer && (
+        <box
+          height={2}
+          paddingLeft={1}
+          paddingTop={1}
+          backgroundColor={THEME.backgroundHighlight}
+          border={['bottom']}
+          borderColor={THEME.borderSubtle}
+        >
+          <text>
+            <span fg={THEME.accentBlue}>⚡ </span>
+            <span fg={THEME.foreground}>{currentServer.name}</span>
+            <span fg={THEME.mutedText}> • server messages</span>
+          </text>
+        </box>
+      )}
       {currentChannel?.topic && (
         <box
           height={2}
           paddingLeft={1}
           paddingTop={1}
           backgroundColor={THEME.backgroundElement}
-          borderBottom
+          border={['bottom']}
           borderColor={THEME.borderSubtle}
         >
           <text>
@@ -217,9 +254,9 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
             showArrows: true,
             trackOptions: {
               foregroundColor: THEME.accentBlue,
-              backgroundColor: THEME.borderSubtle
-            }
-          }
+              backgroundColor: THEME.borderSubtle,
+            },
+          },
         }}
       >
         {allMessages.map((msg: Message) => (

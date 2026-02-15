@@ -16,7 +16,7 @@ export interface IrcSegment {
   strikethrough: boolean
 }
 
-// biome-ignore lint/suspicious/noControlCharactersInRegex: IRC control codes
+// eslint-disable-next-line no-control-regex -- IRC formatting uses control codes by design
 const IRC_CONTROL_RE = /(\x03(?:\d{1,2}(?:,\d{1,2})?)?|[\x02\x1f\x1d\x1e\x11\x0f])/gu
 
 function resolveColor(index: number): string | undefined {
@@ -43,9 +43,9 @@ export function parseIrcFormatting(text: string): IrcSegment[] {
     if (part === '') continue
 
     if (i % 2 === 0) {
-      segments.push({ text: part, fg, bg, bold, italic, underline, strikethrough })
+      segments.push({ text: part!, fg, bg, bold, italic, underline, strikethrough })
     } else {
-      switch (part) {
+      switch (part!) {
         case '\x02':
           bold = !bold
           break
@@ -70,8 +70,8 @@ export function parseIrcFormatting(text: string): IrcSegment[] {
           bg = undefined
           break
         default:
-          if (part.startsWith('\x03')) {
-            const colorPart = part.slice(1)
+          if (part!.startsWith('\x03')) {
+            const colorPart = part!.slice(1)
             if (colorPart === '') {
               // Bare \x03 resets colors
               fg = undefined
@@ -97,15 +97,22 @@ function splitOnNick(text: string, nickname: string): { text: string; isNick: bo
   const parts = text.split(pattern)
   return parts
     .filter((p) => p !== '')
-    .map((p) => ({ text: p, isNick: pattern.test(p) || p.toLowerCase() === nickname.toLowerCase() }))
+    .map((p) => ({
+      text: p,
+      isNick: pattern.test(p) || p.toLowerCase() === nickname.toLowerCase(),
+    }))
 }
 
-export function renderIrcText(text: string, keyPrefix?: string, nickname?: string): React.ReactNode {
+export function renderIrcText(
+  text: string,
+  keyPrefix?: string,
+  nickname?: string
+): React.ReactNode {
   const segments = parseIrcFormatting(text)
 
   if (segments.length === 0) return ''
   if (segments.length === 1 && !nickname) {
-    const seg = segments[0]
+    const seg = segments[0]!
     if (!seg.fg && !seg.bg && !seg.bold && !seg.italic && !seg.underline && !seg.strikethrough) {
       return seg.text
     }
@@ -128,7 +135,12 @@ export function renderIrcText(text: string, keyPrefix?: string, nickname?: strin
         key++
         if (part.isNick) {
           elements.push(
-            <span key={k} fg={THEME.mention} bg={THEME.backgroundMention} attributes={attrs || undefined}>
+            <span
+              key={k}
+              fg={THEME.mention}
+              bg={THEME.backgroundMention}
+              attributes={attrs || undefined}
+            >
               {part.text}
             </span>
           )

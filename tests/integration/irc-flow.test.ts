@@ -10,17 +10,17 @@ describe('IRC Integration - Store Flow', () => {
     // Reset store state before each test
     const store = useStore
     const state = store.getState()
-    
+
     // Clear all servers
-    state.servers.forEach(s => {
+    state.servers.forEach((s) => {
       store.getState().removeServer(s.id)
     })
-    
+
     // Clear all messages
     state.messages.forEach((_, channelId) => {
       store.getState().clearMessages(channelId)
     })
-    
+
     // Reset UI state
     store.getState().setCurrentServer(null)
     store.getState().setCurrentChannel(null)
@@ -333,7 +333,7 @@ describe('IRC Integration - Store Flow', () => {
       })
 
       expect(useStore.getState().servers).toHaveLength(1)
-      
+
       // Step 2: Successfully connected
       useStore.getState().updateServer('server-1', {
         isConnected: true,
@@ -388,7 +388,7 @@ describe('IRC Integration - Store Flow', () => {
 
       // Step 5: Leave channel
       useStore.getState().removeChannel('server-1', 'channel-1')
-      
+
       expect(useStore.getState().getServer('server-1')?.channels).toHaveLength(0)
 
       // Step 6: Disconnect from server

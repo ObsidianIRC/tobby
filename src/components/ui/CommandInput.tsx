@@ -9,7 +9,19 @@ interface CommandInputProps {
   width: number
 }
 
-const COMMANDS = ['connect', 'join', 'part', 'msg', 'me', 'topic', 'nick', 'quit', 'whois', 'away']
+const COMMANDS = [
+  'help',
+  'connect',
+  'join',
+  'part',
+  'msg',
+  'me',
+  'topic',
+  'nick',
+  'quit',
+  'whois',
+  'away',
+]
 
 export function CommandInput({ width }: CommandInputProps) {
   const [input, setInput] = useState('')
@@ -23,18 +35,23 @@ export function CommandInput({ width }: CommandInputProps) {
   const programmaticUpdate = useRef(false)
 
   const { registry, ircClient, renderer } = useAppContext()
+  const activeModal = useStore((state) => state.activeModal)
   const currentServerId = useStore((state) => state.currentServerId)
   const currentChannelId = useStore((state) => state.currentChannelId)
   const servers = useStore((state) => state.servers)
 
   const currentServer = servers.find((s) => s.id === currentServerId)
   const currentChannel = currentServer?.channels.find((c) => c.id === currentChannelId)
+  const currentPrivateChat = currentServer?.privateChats.find((pc) => pc.id === currentChannelId)
 
   const commandParser = useMemo(() => new CommandParser(registry), [registry])
 
   const getPrompt = () => {
     if (currentChannel) {
       return `[${currentChannel.name}] > `
+    }
+    if (currentPrivateChat) {
+      return `[@${currentPrivateChat.username}] > `
     }
     if (currentServer) {
       return `[${currentServer.name}] > `
@@ -162,26 +179,22 @@ export function CommandInput({ width }: CommandInputProps) {
   const promptWidth = prompt.length
 
   return (
-    <box width={width} height={errorMessage ? 4 : 3} flexDirection="column">
-      <box
-        height={2}
-        border={['top']}
-        borderStyle="single"
-        borderColor={THEME.borderActive}
-        paddingLeft={1}
-        backgroundColor={THEME.backgroundInput}
-        flexDirection="row"
-      >
+    <box width={width} height={errorMessage ? 3 : 2} flexDirection="column">
+      <box height={1} paddingLeft={1} backgroundColor={THEME.backgroundInput} flexDirection="row">
         <box width={promptWidth} flexShrink={0} height={1}>
           <text>
             <span fg={THEME.accentBlue}>{prompt}</span>
           </text>
         </box>
         <input
-          focused
+          focused={!activeModal}
           value={input}
           onInput={handleInput}
-          onSubmit={handleSubmit}
+          onSubmit={
+            ((value: string) => {
+              handleSubmit(value)
+            }) as any
+          }
           placeholder="Type a message or /command..."
           flexGrow={1}
           backgroundColor={THEME.backgroundInput}

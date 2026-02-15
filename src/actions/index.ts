@@ -11,7 +11,11 @@ export class ActionRegistry<TStore = unknown> {
     this.actions.delete(actionId)
   }
 
-  execute(actionId: string, context: ActionContext<TStore>, ...params: unknown[]): Promise<void> | void {
+  execute(
+    actionId: string,
+    context: ActionContext<TStore>,
+    ...params: unknown[]
+  ): Promise<void> | void {
     const action = this.actions.get(actionId)
     if (!action) {
       throw new Error(`Unknown action: ${actionId}`)

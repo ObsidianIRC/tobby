@@ -6,11 +6,14 @@ export interface Server {
   name: string
   host: string
   port: number
+  ssl?: boolean
   nickname: string
+  username?: string
+  realname?: string
   password?: string
   saslUsername?: string
   saslPassword?: string
-  isConnected: boolean
+  isConnected?: boolean
   connectionState: 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
   channels: Channel[]
   privateChats: PrivateChat[]
@@ -60,7 +63,17 @@ export interface Message {
   userId: string
   content: string
   timestamp: Date
-  type: 'message' | 'action' | 'notice' | 'system' | 'join' | 'part' | 'quit' | 'kick' | 'nick' | 'mode'
+  type:
+    | 'message'
+    | 'action'
+    | 'notice'
+    | 'system'
+    | 'join'
+    | 'part'
+    | 'quit'
+    | 'kick'
+    | 'nick'
+    | 'mode'
   tags?: Record<string, string>
   replyTo?: string
   replyMessage: Message | null

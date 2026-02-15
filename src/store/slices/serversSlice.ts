@@ -1,4 +1,4 @@
-import type { Channel, Server } from '@/types'
+import type { Channel, PrivateChat, Server } from '@/types'
 import type { StateCreator } from 'zustand'
 import { getDatabase } from '../../services/database'
 
@@ -12,6 +12,9 @@ export interface ServersSlice {
   updateChannel: (serverId: string, channelId: string, updates: Partial<Channel>) => void
   removeChannel: (serverId: string, channelId: string) => void
   getChannel: (serverId: string, channelId: string) => Channel | undefined
+  addPrivateChat: (serverId: string, chat: PrivateChat) => void
+  updatePrivateChat: (serverId: string, chatId: string, updates: Partial<PrivateChat>) => void
+  removePrivateChat: (serverId: string, chatId: string) => void
   loadPersistedServers: () => void
 }
 
@@ -40,12 +43,22 @@ export const createServersSlice: StateCreator<ServersSlice> = (set, get) => ({
 
     try {
       const db = getDatabase()
-      db.updateServer(id, updates)
-      if (updates.connectionState) {
-        db.saveServerState(id, { connectionState: updates.connectionState })
+      // Strip runtime-only fields that don't exist in the servers table
+      const {
+        isConnected: _ic,
+        connectionState,
+        channels: _ch,
+        privateChats: _pc,
+        ...dbUpdates
+      } = updates as any
+      if (Object.keys(dbUpdates).length > 0) {
+        db.updateServer(id, dbUpdates)
+      }
+      if (connectionState) {
+        db.saveServerState(id, { connectionState })
       }
     } catch (error) {
-      console.error('Failed to update server:', error)
+      debugLog?.('Failed to update server:', error)
     }
   },
 
@@ -78,12 +91,15 @@ export const createServersSlice: StateCreator<ServersSlice> = (set, get) => ({
       try {
         const db = getDatabase()
         // Only persist basic channel info (id, name), not the full object with users/messages
-        const simpleChannel = {
+        const simpleChannel: Channel = {
           id: channel.id,
           name: channel.name,
+          serverId: serverId,
           topic: channel.topic || '',
           users: [],
+          messages: [],
           unreadCount: 0,
+          isPrivate: false,
           isMentioned: false,
         }
         db.saveChannel(simpleChannel, serverId)
@@ -126,18 +142,51 @@ export const createServersSlice: StateCreator<ServersSlice> = (set, get) => ({
     return server?.channels.find((c) => c.id === channelId)
   },
 
+  addPrivateChat: (serverId, chat) =>
+    set((state) => ({
+      servers: state.servers.map((s) =>
+        s.id === serverId ? { ...s, privateChats: [...s.privateChats, chat] } : s
+      ),
+    })),
+
+  updatePrivateChat: (serverId, chatId, updates) =>
+    set((state) => ({
+      servers: state.servers.map((s) =>
+        s.id === serverId
+          ? {
+              ...s,
+              privateChats: s.privateChats.map((pc) =>
+                pc.id === chatId ? { ...pc, ...updates } : pc
+              ),
+            }
+          : s
+      ),
+    })),
+
+  removePrivateChat: (serverId, chatId) =>
+    set((state) => ({
+      servers: state.servers.map((s) =>
+        s.id === serverId
+          ? { ...s, privateChats: s.privateChats.filter((pc) => pc.id !== chatId) }
+          : s
+      ),
+    })),
+
   loadPersistedServers: () => {
     try {
       const db = getDatabase()
       const persistedServers = db.getAutoConnectServers()
 
       const servers: Server[] = persistedServers.map((ps) => {
-        const channels = db.getAutoJoinChannels(ps.id).map((pc) => ({
+        const channels: Channel[] = db.getAutoJoinChannels(ps.id).map((pc) => ({
           id: pc.id,
           name: pc.name,
+          serverId: ps.id,
           topic: '',
           users: [],
+          messages: [],
           unreadCount: 0,
+          isPrivate: false,
           isMentioned: false,
         }))
 
@@ -153,7 +202,7 @@ export const createServersSlice: StateCreator<ServersSlice> = (set, get) => ({
           password: ps.password || undefined,
           saslUsername: ps.sasl_account || undefined,
           saslPassword: ps.sasl_password || undefined,
-          connectionState: 'disconnected',
+          connectionState: 'disconnected' as const,
           channels,
           privateChats: [],
         }

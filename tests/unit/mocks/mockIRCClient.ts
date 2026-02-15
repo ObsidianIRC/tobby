@@ -1,5 +1,4 @@
 import { EventEmitter } from 'events'
-import type { IRCClient } from '@/utils/ircClient'
 
 export class MockIRCClient extends EventEmitter {
   public connected = false
@@ -9,10 +8,10 @@ export class MockIRCClient extends EventEmitter {
     name: string,
     host: string,
     port: number,
-    nickname: string,
-    password?: string,
-    saslAccountName?: string,
-    saslPassword?: string,
+    _nickname: string,
+    _password?: string,
+    _saslAccountName?: string,
+    _saslPassword?: string,
     serverId?: string
   ) {
     this.connected = true
@@ -31,11 +30,10 @@ export class MockIRCClient extends EventEmitter {
     this.servers.delete(serverId)
   }
 
-  // Add other methods as needed for tests, mostly no-ops or spies
-  joinChannel(serverId: string, channel: string) {
+  joinChannel(_serverId: string, channel: string) {
     return { id: 'mock-channel-id', name: channel }
   }
-  leaveChannel(serverId: string, channel: string) {}
-  sendMessage(serverId: string, channel: string, message: string) {}
-  sendRaw(serverId: string, command: string) {}
+  leaveChannel(_serverId: string, _channel: string) {}
+  sendMessage(_serverId: string, _channel: string, _message: string) {}
+  sendRaw(_serverId: string, _command: string) {}
 }

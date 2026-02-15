@@ -34,23 +34,56 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
     const { ircClient } = get()
     if (!ircClient) return
 
+    const addServerMessage = (serverId: string, content: string) => {
+      const { addMessage } = get()
+      const message: Message = {
+        id: uuidv4(),
+        type: 'system',
+        content,
+        timestamp: new Date(),
+        userId: 'server',
+        channelId: serverId,
+        serverId,
+        reactions: [],
+        replyMessage: null,
+        mentioned: [],
+      }
+      addMessage(serverId, message)
+    }
+
     // Connection events
     ircClient.on('ready', (data: EventMap['ready']) => {
       const { updateServer } = get()
       updateServer(data.serverId, {
         isConnected: true,
         connectionState: 'connected',
+        nickname: data.nickname,
       })
+      addServerMessage(data.serverId, `Registered on server as ${data.nickname}`)
     })
 
     ircClient.on('connectionStateChange', (data: EventMap['connectionStateChange']) => {
+      debugLog?.(`[Store] connectionStateChange: ${data.serverId} -> ${data.connectionState}`)
       const { updateServer } = get()
       const isConnected = data.connectionState === 'connected'
       updateServer(data.serverId, {
         connectionState: data.connectionState,
         isConnected,
       })
+      if (data.connectionState === 'connected') {
+        addServerMessage(data.serverId, 'Connected to server')
+      } else if (data.connectionState === 'disconnected') {
+        addServerMessage(data.serverId, 'Disconnected from server')
+      }
     })
+
+    // Raw server messages (numeric replies, server NOTICEs)
+    ;(ircClient as any).on(
+      'serverMessage',
+      (data: { serverId: string; command: string; text: string }) => {
+        addServerMessage(data.serverId, `[${data.command}] ${data.text}`)
+      }
+    )
 
     // Channel message
     ircClient.on('CHANMSG', (data: EventMap['CHANMSG']) => {
@@ -61,11 +94,15 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       const channel = server.channels.find((c) => c.name === data.channelName)
       if (!channel) return
 
+      const isAction = data.message.startsWith('\x01ACTION ') && data.message.endsWith('\x01')
+      const content = isAction ? data.message.slice(8, -1) : data.message
+      const type = isAction ? 'action' : 'message'
+
       const message: Message = {
         id: uuidv4(),
         msgid: data.mtags?.msgid,
-        type: 'message',
-        content: data.message,
+        type,
+        content,
         timestamp: data.timestamp,
         userId: data.sender,
         channelId: channel.id,
@@ -95,7 +132,7 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
 
     // User message (private message/whisper)
     ircClient.on('USERMSG', (data: EventMap['USERMSG']) => {
-      const { getServer, addMessage } = get()
+      const { getServer, addMessage, addPrivateChat, updatePrivateChat, currentChannelId } = get()
       const server = getServer(data.serverId)
       if (!server) return
 
@@ -109,14 +146,18 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
           unreadCount: 0,
           isMentioned: false,
         }
-        // TODO: Add addPrivateChat method to store
+        addPrivateChat(data.serverId, privateChat)
       }
+
+      const isAction = data.message.startsWith('\x01ACTION ') && data.message.endsWith('\x01')
+      const msgContent = isAction ? data.message.slice(8, -1) : data.message
+      const msgType = isAction ? 'action' : 'message'
 
       const message: Message = {
         id: uuidv4(),
         msgid: data.mtags?.msgid,
-        type: 'message',
-        content: data.message,
+        type: msgType,
+        content: msgContent,
         timestamp: data.timestamp,
         userId: data.sender,
         channelId: privateChat.id,
@@ -128,6 +169,16 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       }
 
       addMessage(privateChat.id, message)
+
+      // Increment unread if not currently viewing this chat
+      if (currentChannelId !== privateChat.id) {
+        updatePrivateChat(data.serverId, privateChat.id, {
+          unreadCount: privateChat.unreadCount + 1,
+          isMentioned: true,
+        })
+      }
+
+      process.stdout.write('\x07')
     })
 
     // User join
@@ -171,7 +222,14 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
 
     // User part
     ircClient.on('PART', (data: EventMap['PART']) => {
-      const { getServer, updateChannel, addMessage, removeChannel, currentChannelId, setCurrentChannel } = get()
+      const {
+        getServer,
+        updateChannel,
+        addMessage,
+        removeChannel,
+        currentChannelId,
+        setCurrentChannel,
+      } = get()
       const server = getServer(data.serverId)
       if (!server) return
 
@@ -374,12 +432,19 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
 
       if (!channel) return
 
+      const fullText = data.lines.join('\n')
+      const isAction =
+        data.lines[0]?.startsWith('\x01ACTION ') &&
+        data.lines[data.lines.length - 1]?.endsWith('\x01')
+      const content = isAction ? fullText.slice(8, -1) : fullText
+      const type = isAction ? 'action' : 'message'
+
       const message: Message = {
         id: uuidv4(),
         msgid: data.mtags?.msgid,
         multilineMessageIds: data.messageIds,
-        type: 'message',
-        content: data.lines.join('\n'),
+        type,
+        content,
         timestamp: data.timestamp,
         userId: data.sender,
         channelId: channel.id,
@@ -393,7 +458,6 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       addMessage(channel.id, message)
 
       const { currentChannelId, updateChannel } = get()
-      const fullText = data.lines.join('\n')
       const mentioned = nickMentioned(fullText, server.nickname)
 
       if (currentChannelId !== channel.id) {

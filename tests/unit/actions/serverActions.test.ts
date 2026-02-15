@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { ActionRegistry } from '@/actions'
 import { registerServerActions } from '@/actions/serverActions'
 import { useStore } from '@/store'
@@ -45,9 +45,8 @@ describe('Server Actions', () => {
 
     // Check if server was added
     expect(state.servers).toHaveLength(1)
-    expect(state.servers[0].name).toBe('Test Server')
+    expect(state.servers[0]!.name).toBe('Test Server')
 
-    // THIS IS THE BUG: verify that currentServerId is set to the new server
-    expect(state.currentServerId).toBe(state.servers[0].id)
+    expect(state.currentServerId).toBe(state.servers[0]!.id)
   })
 })

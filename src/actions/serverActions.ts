@@ -7,11 +7,10 @@ export function registerServerActions(registry: ActionRegistry<AppStore>) {
   // Connect to server
   registry.register({
     id: 'server.connect',
-    label: 'Connect to Server',
-    description: 'Connect to an IRC server',
+    label: 'Add Server',
+    description: 'Add and connect to an IRC server',
     category: 'server',
-    keybinding: 'ctrl+k',
-    keywords: ['connect', 'server', 'irc', 'join'],
+    keywords: ['connect', 'server', 'irc', 'add', 'new'],
     priority: 100,
 
     isEnabled: () => true,
@@ -199,35 +198,35 @@ export function registerServerActions(registry: ActionRegistry<AppStore>) {
   registry.register({
     id: 'server.remove',
     label: 'Remove Server',
-    description: 'Remove the current server from the list',
+    description: 'Remove a server from the list',
     category: 'server',
     keybinding: ':server-remove',
     keywords: ['remove', 'delete', 'server'],
     priority: 80,
 
-    isEnabled: (ctx) => {
-      return !!ctx.currentServer
-    },
+    isEnabled: () => true,
 
     isVisible: (ctx) => {
-      return !!ctx.currentServer
+      return ctx.store.servers.length > 0
     },
 
     execute: async (ctx: ActionContext<AppStore>) => {
-      const { store, ircClient, currentServer } = ctx
-      if (!currentServer) {
-        throw new Error('No server selected')
+      const { store, ircClient } = ctx
+      const servers = store.servers
+
+      if (servers.length === 0) return
+
+      if (servers.length > 1) {
+        store.openModal('removeServer')
+        return
       }
 
-      // Disconnect if connected
-      if (currentServer.isConnected && ircClient) {
-        ircClient.disconnect(currentServer.id)
+      // Single server — remove directly
+      const server = servers[0]!
+      if (server.isConnected && ircClient) {
+        ircClient.disconnect(server.id)
       }
-
-      // Remove server from store
-      store.removeServer(currentServer.id)
-
-      // Clear current server
+      store.removeServer(server.id)
       store.setCurrentServer(null)
       store.setCurrentChannel(null)
     },

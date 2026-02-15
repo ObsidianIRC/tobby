@@ -1,5 +1,5 @@
 import { useStore } from '../../store'
-import { THEME, COLORS, NICKNAME_COLORS } from '../../constants/theme'
+import { THEME, NICKNAME_COLORS } from '../../constants/theme'
 import { SplitBorder } from '../../constants/borders'
 import type { User } from '../../types'
 
@@ -15,7 +15,7 @@ const hashString = (str: string): number => {
 
 const getNicknameColor = (nickname: string): string => {
   const index = hashString(nickname) % NICKNAME_COLORS.length
-  return NICKNAME_COLORS[index]
+  return NICKNAME_COLORS[index] ?? THEME.foreground
 }
 
 interface MemberPaneProps {
@@ -137,7 +137,7 @@ export function MemberPane({ width, height, focused }: MemberPaneProps) {
         paddingLeft={1}
         paddingTop={1}
         backgroundColor={THEME.backgroundHighlight}
-        borderBottom
+        border={['bottom']}
         borderColor={THEME.borderSubtle}
       >
         <text>

@@ -35,17 +35,24 @@ export class NodeTCPSocket implements ISocket {
         port,
         rejectUnauthorized: false,
       })
+      // For TLS, wait for handshake to complete before signaling open
+      ;(this.socket as tls.TLSSocket).on('secureConnect', () => {
+        if (this._readyState === 0) {
+          this._readyState = 1
+          this.onopen?.()
+        }
+      })
     } else {
       this.socket = net.connect({ host, port })
+      this.socket.on('connect', () => {
+        this._readyState = 1
+        this.onopen?.()
+      })
     }
-
-    this.socket.on('connect', () => {
-      this._readyState = 1
-      this.onopen?.()
-    })
 
     this.socket.on('data', (data: Buffer) => {
       const text = data.toString('utf-8')
+      globalThis.debugLog?.(`[Socket] data from ${host}: ${text.substring(0, 200)}`)
       this.onmessage?.({ data: text })
     })
 

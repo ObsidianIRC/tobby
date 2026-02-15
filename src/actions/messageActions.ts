@@ -15,25 +15,60 @@ export function registerMessageActions(registry: ActionRegistry<AppStore>) {
     priority: 100,
 
     isEnabled: (ctx) => {
-      return !!ctx.currentChannel
+      if (ctx.currentChannel) return true
+      const server = ctx.currentServer
+      if (!server) return false
+      return server.privateChats.some((pc) => pc.id === ctx.store.currentChannelId)
     },
 
-    isVisible: () => true,
+    isVisible: () => false,
 
     execute: async (ctx: ActionContext<AppStore>, content?: string) => {
       const { store, ircClient, currentServer, currentChannel } = ctx
-      if (!ircClient || !currentServer || !currentChannel) {
-        throw new Error('No channel selected')
+      if (!ircClient || !currentServer) {
+        throw new Error('No server connected')
       }
 
       if (!content || content.trim() === '') {
         throw new Error('Message content cannot be empty')
       }
 
+      // Check if we're viewing a private chat
+      const privateChat = currentServer.privateChats.find((pc) => pc.id === store.currentChannelId)
+
+      debugLog?.(
+        'sendMessage action executed with content:',
+        content,
+        'currentChannel:',
+        currentChannel,
+        'privateChat:',
+        privateChat
+      )
+      if (privateChat) {
+        ircClient.sendRaw(currentServer.id, `PRIVMSG ${privateChat.username} :${content}`)
+        debugLog?.('Sent private message to', privateChat.username, 'with content:', content)
+        const localMessage: Message = {
+          id: uuidv4(),
+          type: 'message',
+          content,
+          timestamp: new Date(),
+          userId: currentServer.nickname,
+          channelId: privateChat.id,
+          serverId: currentServer.id,
+          reactions: [],
+          replyMessage: null,
+          mentioned: [],
+        }
+        store.addMessage(privateChat.id, localMessage)
+        return
+      }
+
+      if (!currentChannel) {
+        throw new Error('No channel selected')
+      }
+
       ircClient.sendMessage(currentServer.id, currentChannel.id, content)
 
-      // Local echo: IRC servers don't echo your own messages back
-      // unless echo-message capability is negotiated
       const localMessage: Message = {
         id: uuidv4(),
         type: 'message',
@@ -64,9 +99,7 @@ export function registerMessageActions(registry: ActionRegistry<AppStore>) {
       return !!ctx.currentChannel && !!ctx.currentServer?.capabilities?.includes('draft/multiline')
     },
 
-    isVisible: (ctx) => {
-      return !!ctx.currentChannel
-    },
+    isVisible: () => false,
 
     execute: async (ctx: ActionContext<AppStore>, content?: string) => {
       const { ircClient, currentServer, currentChannel } = ctx
@@ -86,7 +119,7 @@ export function registerMessageActions(registry: ActionRegistry<AppStore>) {
 
       // Split content into lines
       const lines = content.split('\n')
-      
+
       // Send as multiline
       ircClient.sendMultilineMessage(currentServer.id, currentChannel.name, lines)
     },
@@ -127,7 +160,10 @@ export function registerMessageActions(registry: ActionRegistry<AppStore>) {
       if (msgid && currentServer.capabilities?.includes('draft/reply')) {
         // Send with +draft/reply tag
         const replyTag = `+draft/reply=${msgid}`
-        ircClient.sendRaw(currentServer.id, `@${replyTag} PRIVMSG ${currentChannel.name} :${content}`)
+        ircClient.sendRaw(
+          currentServer.id,
+          `@${replyTag} PRIVMSG ${currentChannel.name} :${content}`
+        )
       } else {
         const mention = `${selectedMessage.userId}: ${content}`
         ircClient.sendMessage(currentServer.id, currentChannel.id, mention)
@@ -183,7 +219,10 @@ export function registerMessageActions(registry: ActionRegistry<AppStore>) {
       }
 
       const editTag = `+draft/edit=${msgid}`
-      ircClient.sendRaw(currentServer.id, `@${editTag} PRIVMSG ${currentChannel.name} :${newContent}`)
+      ircClient.sendRaw(
+        currentServer.id,
+        `@${editTag} PRIVMSG ${currentChannel.name} :${newContent}`
+      )
     },
   })
 

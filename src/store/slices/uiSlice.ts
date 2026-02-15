@@ -42,12 +42,17 @@ export const createUISlice: StateCreator<AppStore, [], [], UISlice> = (set, get)
   setCurrentChannel: (channelId) => {
     set({ currentChannelId: channelId })
     if (channelId) {
-      const { servers, updateChannel } = get()
+      const { servers, updateChannel, updatePrivateChat } = get()
       for (const server of servers) {
         const channel = server.channels.find((c) => c.id === channelId)
         if (channel) {
           updateChannel(server.id, channelId, { unreadCount: 0, isMentioned: false })
-          break
+          return
+        }
+        const privateChat = server.privateChats.find((pc) => pc.id === channelId)
+        if (privateChat) {
+          updatePrivateChat(server.id, channelId, { unreadCount: 0, isMentioned: false })
+          return
         }
       }
     }

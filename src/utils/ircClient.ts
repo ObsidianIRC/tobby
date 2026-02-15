@@ -68,40 +68,74 @@ export class IRCClient extends BaseIRCClient {
 
     // Set up socket handlers to match BaseIRCClient behavior
     nodeSocket.onopen = () => {
-      // Send password if provided
+      debugLog?.(`[IRC] Socket opened for ${host}:${port}`)
       if (password) {
         nodeSocket.send(`PASS ${password}`)
       }
 
-      // Send NICK
       nodeSocket.send(`NICK ${nickname}`)
 
-      // Send USER (required for registration)
-      // Format: USER <username> <mode> <unused> :<realname>
       const username = nickname.replace(/[^a-zA-Z0-9]/g, '').substring(0, 9)
       nodeSocket.send(`USER ${username} 0 * :${nickname}`)
     }
 
     nodeSocket.onmessage = (event) => {
-      // Pass all messages to the base client's message handler
       ;(this as any).handleMessage(event.data, server.id)
 
-      // Check for registration completion
-      const message = event.data
-      if (message.startsWith(':') && message.includes(' 001 ')) {
-        // 001 RPL_WELCOME - Registration complete
-        if (!server.isConnected) {
-          server.isConnected = true
-          server.connectionState = 'connected'
-          ;(this as any).triggerEvent('connectionStateChange', {
+      const lines = event.data.split('\r\n')
+      for (const line of lines) {
+        if (!line.startsWith(':')) continue
+
+        // RPL_WELCOME (001) — mark as connected
+        if (line.includes(' 001 ')) {
+          if (!server.isConnected) {
+            debugLog?.(`[IRC] RPL_WELCOME received for ${host} - connected!`)
+            server.isConnected = true
+            server.connectionState = 'connected'
+            ;(this as any).triggerEvent('connectionStateChange', {
+              serverId: server.id,
+              connectionState: 'connected',
+            })
+          }
+        }
+
+        // 433 — Nickname already in use, retry with _ suffix
+        if (line.includes(' 433 ')) {
+          const currentNick = (this as any).nicks.get(server.id) as string
+          const newNick = currentNick + '_'
+          debugLog?.(`[IRC] Nick "${currentNick}" in use, retrying as "${newNick}"`)
+          ;(this as any).nicks.set(server.id, newNick)
+          nodeSocket.send(`NICK ${newNick}`)
+        }
+
+        // Forward "interesting" server messages (numeric replies, server NOTICEs)
+        const parts = line.split(' ')
+        const command = parts[1]
+        if (command && /^\d{3}$/.test(command)) {
+          // Extract the text after the numeric + target (e.g. ":server 001 nick :Welcome...")
+          const textStart = line.indexOf(':', 1)
+          const text = textStart !== -1 ? line.slice(textStart + 1) : parts.slice(3).join(' ')
+          ;(this as any).triggerEvent('serverMessage', {
             serverId: server.id,
-            connectionState: 'connected',
+            command,
+            text,
+            raw: line,
+          })
+        } else if (command === 'NOTICE' && !parts[2]?.startsWith('#')) {
+          const textStart = line.indexOf(':', 1)
+          const text = textStart !== -1 ? line.slice(textStart + 1) : ''
+          ;(this as any).triggerEvent('serverMessage', {
+            serverId: server.id,
+            command: 'NOTICE',
+            text,
+            raw: line,
           })
         }
       }
     }
 
     nodeSocket.onerror = (err) => {
+      debugLog?.(`[IRC] Socket error for ${host}:`, err.message)
       ;(this as any).triggerEvent('error', {
         serverId: server.id,
         error: err.message,
@@ -109,12 +143,13 @@ export class IRCClient extends BaseIRCClient {
     }
 
     nodeSocket.onclose = () => {
+      debugLog?.(`[IRC] Socket closed for ${host}`)
       server.isConnected = false
       server.connectionState = 'disconnected'
       ;(this as any).triggerEvent('disconnect', { serverId: server.id })
     }
 
-    console.log('[IRC-DEBUG] Socket handlers configured, waiting for connection...')
+    debugLog?.(`[IRC] Socket handlers configured for ${host}:${port}, waiting for connection...`)
     return { id: server.id, server }
   }
 }

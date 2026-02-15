@@ -112,7 +112,7 @@ class DatabaseService {
         server.username || null,
         server.realname || null,
         server.password || null,
-        server.saslAccountName || null,
+        server.saslUsername || null,
         server.saslPassword || null,
         1, // auto_connect default true
         now,
@@ -122,7 +122,9 @@ class DatabaseService {
   }
 
   getServer(id: string): PersistedServer | null {
-    const row = this.db.query('SELECT * FROM servers WHERE id = ?').get(id) as PersistedServer | null
+    const row = this.db
+      .query('SELECT * FROM servers WHERE id = ?')
+      .get(id) as PersistedServer | null
     return row
   }
 

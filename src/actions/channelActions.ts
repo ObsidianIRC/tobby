@@ -1,6 +1,41 @@
-import type { ActionContext } from '@/types'
+import type { ActionContext, Server } from '@/types'
 import type { AppStore } from '@/store'
 import type { ActionRegistry } from '@/actions'
+
+interface BufferEntry {
+  serverId: string
+  channelId: string | null // null = server buffer
+}
+
+function getBufferList(servers: Server[]): BufferEntry[] {
+  const buffers: BufferEntry[] = []
+  for (const server of servers) {
+    buffers.push({ serverId: server.id, channelId: null })
+    for (const channel of server.channels) {
+      buffers.push({ serverId: server.id, channelId: channel.id })
+    }
+    for (const pm of server.privateChats) {
+      buffers.push({ serverId: server.id, channelId: pm.id })
+    }
+  }
+  return buffers
+}
+
+function findCurrentBufferIndex(
+  buffers: BufferEntry[],
+  currentServerId: string | null,
+  currentChannelId: string | null
+): number {
+  if (!currentServerId) return -1
+  return buffers.findIndex(
+    (b) => b.serverId === currentServerId && b.channelId === currentChannelId
+  )
+}
+
+function applyBuffer(state: AppStore, buffer: BufferEntry) {
+  state.setCurrentServer(buffer.serverId)
+  state.setCurrentChannel(buffer.channelId)
+}
 
 export function registerChannelActions(registry: ActionRegistry<AppStore>) {
   // Join channel
@@ -34,9 +69,7 @@ export function registerChannelActions(registry: ActionRegistry<AppStore>) {
       }
 
       // Ensure channel name starts with #
-      const normalizedChannelName = channelName.startsWith('#')
-        ? channelName
-        : `#${channelName}`
+      const normalizedChannelName = channelName.startsWith('#') ? channelName : `#${channelName}`
 
       // Check if we're already in this channel
       const existingChannel = currentServer.channels.find(
@@ -50,7 +83,20 @@ export function registerChannelActions(registry: ActionRegistry<AppStore>) {
       }
 
       // Join the channel using IRC client
-      const channel = ircClient.joinChannel(currentServer.id, normalizedChannelName)
+      const ircChannel = ircClient.joinChannel(currentServer.id, normalizedChannelName)
+
+      // Map ObsidianIRC Channel to our Channel type
+      const channel = {
+        id: ircChannel.id,
+        name: ircChannel.name,
+        serverId: currentServer.id,
+        topic: '',
+        users: [],
+        messages: [],
+        unreadCount: 0,
+        isPrivate: false,
+        isMentioned: false,
+      }
 
       // Add channel to store (critical: IRC client doesn't sync to store automatically)
       store.addChannel(currentServer.id, channel)
@@ -159,75 +205,91 @@ export function registerChannelActions(registry: ActionRegistry<AppStore>) {
     },
   })
 
-  // Switch to next channel
+  // Switch to next buffer (server, channel, PM — across all servers)
   registry.register({
-    id: 'channel.next',
-    label: 'Next Channel',
-    description: 'Switch to the next channel',
+    id: 'buffer.next',
+    label: 'Next Buffer',
+    description: 'Switch to the next buffer',
     category: 'navigation',
-    keybinding: 'ctrl+n',
-    keywords: ['next', 'channel', 'switch'],
+    keybinding: 'alt+n',
+    keywords: ['next', 'buffer', 'channel', 'switch'],
     priority: 90,
 
-    isEnabled: (ctx) => {
-      return !!ctx.currentServer && ctx.currentServer.channels.length > 0
-    },
-
-    isVisible: () => true,
+    isEnabled: () => true,
+    isVisible: () => false,
 
     execute: async (ctx: ActionContext<AppStore>) => {
-      const { store, currentServer, currentChannel } = ctx
-      if (!currentServer || currentServer.channels.length === 0) {
-        return
-      }
+      const { store } = ctx
+      const state = store
+      const buffers = getBufferList(state.servers)
+      if (buffers.length === 0) return
 
-      const channels = currentServer.channels
-      const currentIndex = currentChannel
-        ? channels.findIndex((c) => c.id === currentChannel.id)
-        : -1
-
-      const nextIndex = (currentIndex + 1) % channels.length
-      const nextChannel = channels[nextIndex]
-      if (nextChannel) {
-        store.setCurrentChannel(nextChannel.id)
-      }
+      const currentIdx = findCurrentBufferIndex(
+        buffers,
+        state.currentServerId,
+        state.currentChannelId
+      )
+      const nextIdx = (currentIdx + 1) % buffers.length
+      applyBuffer(state, buffers[nextIdx]!)
     },
   })
 
-  // Switch to previous channel
+  // Switch to previous buffer
   registry.register({
-    id: 'channel.prev',
-    label: 'Previous Channel',
-    description: 'Switch to the previous channel',
+    id: 'buffer.prev',
+    label: 'Previous Buffer',
+    description: 'Switch to the previous buffer',
     category: 'navigation',
-    keybinding: 'ctrl+p',
-    keywords: ['previous', 'prev', 'channel', 'switch'],
+    keybinding: 'alt+p',
+    keywords: ['previous', 'prev', 'buffer', 'channel', 'switch'],
     priority: 90,
 
-    isEnabled: (ctx) => {
-      return !!ctx.currentServer && ctx.currentServer.channels.length > 0
-    },
-
-    isVisible: () => true,
+    isEnabled: () => true,
+    isVisible: () => false,
 
     execute: async (ctx: ActionContext<AppStore>) => {
-      const { store, currentServer, currentChannel } = ctx
-      if (!currentServer || currentServer.channels.length === 0) {
-        return
-      }
+      const { store } = ctx
+      const state = store
+      const buffers = getBufferList(state.servers)
+      if (buffers.length === 0) return
 
-      const channels = currentServer.channels
-      const currentIndex = currentChannel
-        ? channels.findIndex((c) => c.id === currentChannel.id)
-        : -1
-
-      const prevIndex = currentIndex <= 0 ? channels.length - 1 : currentIndex - 1
-      const prevChannel = channels[prevIndex]
-      if (prevChannel) {
-        store.setCurrentChannel(prevChannel.id)
-      }
+      const currentIdx = findCurrentBufferIndex(
+        buffers,
+        state.currentServerId,
+        state.currentChannelId
+      )
+      const prevIdx = currentIdx <= 0 ? buffers.length - 1 : currentIdx - 1
+      applyBuffer(state, buffers[prevIdx]!)
     },
   })
+
+  // Alt+1 through Alt+9, Alt+0 — jump to buffer by number
+  const numberKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
+  for (const numKey of numberKeys) {
+    const bufferIndex = numKey === '0' ? 9 : Number(numKey) - 1
+    registry.register({
+      id: `buffer.goto.${numKey}`,
+      label: `Go to Buffer ${numKey}`,
+      description: `Switch to buffer ${numKey}`,
+      category: 'navigation',
+      keybinding: `alt+${numKey}`,
+      keywords: ['buffer', 'goto', numKey],
+      priority: 85,
+
+      isEnabled: () => true,
+      isVisible: () => false,
+
+      execute: async (ctx: ActionContext<AppStore>) => {
+        const { store } = ctx
+        const state = store
+        const buffers = getBufferList(state.servers)
+        const target = buffers[bufferIndex]
+        if (target) {
+          applyBuffer(state, target)
+        }
+      },
+    })
+  }
 
   // Mark channel as read
   registry.register({

@@ -6,6 +6,9 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import prettier from 'eslint-config-prettier'
 
 export default [
+  {
+    ignores: ['ObsidianIRC/**', 'dist/**', 'node_modules/**'],
+  },
   js.configs.recommended,
   {
     files: ['**/*.{ts,tsx}'],
@@ -22,6 +25,16 @@ export default [
         console: 'readonly',
         process: 'readonly',
         Buffer: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        globalThis: 'readonly',
+        debugLog: 'readonly',
+        URL: 'readonly',
+        React: 'readonly',
+        Timer: 'readonly',
+        require: 'readonly',
       },
     },
     plugins: {
@@ -35,6 +48,22 @@ export default [
       ...reactHooks.configs.recommended.rules,
       'react/react-in-jsx-scope': 'off',
       'react/prop-types': 'off',
+      // @opentui uses custom JSX properties (fg, bg, flexDirection, etc.)
+      'react/no-unknown-property': ['error', {
+        ignore: [
+          'fg', 'bg', 'attributes',
+          'flexDirection', 'flexGrow', 'flexShrink',
+          'backgroundColor', 'focusedBackgroundColor',
+          'borderColor', 'borderStyle', 'customBorderChars',
+          'paddingLeft', 'paddingRight', 'paddingTop', 'paddingBottom',
+          'marginLeft', 'marginRight', 'marginTop', 'marginBottom',
+          'gap', 'rowGap', 'columnGap',
+          'justifyContent', 'alignItems', 'alignSelf',
+          'position', 'left', 'right', 'top', 'bottom',
+          'focused', 'stickyScroll', 'stickyStart', 'scrollAcceleration',
+          'titleAlignment',
+        ],
+      }],
       '@typescript-eslint/no-unused-vars': [
         'error',
         {
@@ -44,6 +73,7 @@ export default [
       ],
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-require-imports': 'off',
     },
     settings: {
       react: {
