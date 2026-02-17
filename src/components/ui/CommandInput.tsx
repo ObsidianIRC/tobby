@@ -4,6 +4,7 @@ import { useAppContext } from '../../context/AppContext'
 import { useStore } from '../../store'
 import { CommandParser } from '../../services/commands'
 import { useTypingIndicator } from '../../hooks/useTypingIndicator'
+import { useTabCompletion } from '../../hooks/useTabCompletion'
 import { THEME } from '../../constants/theme'
 
 interface CommandInputProps {
@@ -32,10 +33,9 @@ export function CommandInput({ width }: CommandInputProps) {
   const [commandHistory, setCommandHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
   const [errorMessage, setErrorMessage] = useState('')
-  const [completionIndex, setCompletionIndex] = useState(-1)
 
   // Track whether a programmatic update is in progress to avoid
-  // handleChange resetting completionIndex/historyIndex
+  // handleInput resetting history/completion state
   const programmaticUpdate = useRef(false)
 
   const { registry, ircClient, renderer } = useAppContext()
@@ -50,44 +50,15 @@ export function CommandInput({ width }: CommandInputProps) {
 
   const commandParser = useMemo(() => new CommandParser(registry), [registry])
 
-  // Send typing notifications; the hook watches the raw input and decides when to send
   useTypingIndicator({ input })
 
+  const { handleTabCompletion, resetCompletion } = useTabCompletion()
+
   const getPrompt = () => {
-    if (currentChannel) {
-      return `[${currentChannel.name}] > `
-    }
-    if (currentPrivateChat) {
-      return `[@${currentPrivateChat.username}] > `
-    }
-    if (currentServer) {
-      return `[${currentServer.name}] > `
-    }
+    if (currentChannel) return `[${currentChannel.name}] > `
+    if (currentPrivateChat) return `[@${currentPrivateChat.username}] > `
+    if (currentServer) return `[${currentServer.name}] > `
     return '> '
-  }
-
-  const getCompletions = (text: string): string[] => {
-    if (!text.startsWith('/')) return []
-    const commandPart = text.slice(1).toLowerCase()
-    if (!commandPart) return COMMANDS.map((cmd) => `/${cmd}`)
-    return COMMANDS.filter((cmd) => cmd.startsWith(commandPart)).map((cmd) => `/${cmd}`)
-  }
-
-  const handleTabCompletion = () => {
-    if (!input.startsWith('/')) return
-
-    const matches = getCompletions(input)
-    if (matches.length === 0) return
-
-    programmaticUpdate.current = true
-    if (completionIndex === -1) {
-      setCompletionIndex(0)
-      setInput(matches[0] + ' ')
-    } else {
-      const nextIndex = (completionIndex + 1) % matches.length
-      setCompletionIndex(nextIndex)
-      setInput(matches[nextIndex] + ' ')
-    }
   }
 
   const handleSubmit = async (value: string) => {
@@ -95,7 +66,7 @@ export function CommandInput({ width }: CommandInputProps) {
     if (!text) return
 
     setErrorMessage('')
-    setCompletionIndex(-1)
+    resetCompletion()
 
     const context = {
       store: useStore.getState(),
@@ -122,11 +93,17 @@ export function CommandInput({ width }: CommandInputProps) {
     }
   }
 
-  // Intercept tab, up, down — prevent <input> from processing them
   useKeyboard((key) => {
     if (key.name === 'tab') {
       key.preventDefault()
-      handleTabCompletion()
+
+      const users = currentChannel?.users ?? []
+      const channels = currentServer?.channels ?? []
+      const result = handleTabCompletion(input, { users, channels, commands: COMMANDS })
+      if (result) {
+        programmaticUpdate.current = true
+        setInput(result.newText)
+      }
       return
     }
 
@@ -172,7 +149,8 @@ export function CommandInput({ width }: CommandInputProps) {
     }
     setInput(value)
     setHistoryIndex(-1)
-    setCompletionIndex(-1)
+    // Let the tab completion hook detect the text change itself; it will
+    // reset its session on the next Tab press if the text diverged.
   }
 
   useEffect(() => {

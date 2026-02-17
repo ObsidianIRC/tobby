@@ -1,25 +1,11 @@
 import { MacOSScrollAccel } from '@opentui/core'
 import { useStore } from '../../store'
-import { THEME, COLORS, NICKNAME_COLORS } from '../../constants/theme'
+import { THEME, COLORS } from '../../constants/theme'
 import { renderIrcText } from '../../utils/ircFormatting'
+import { getNicknameColor } from '../../utils/nickColors'
 import type { Message } from '../../types'
 
 const chatScrollAccel = new MacOSScrollAccel({ maxMultiplier: 8 })
-
-// Hash function for consistent nickname colors
-const hashString = (str: string): number => {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) - hash + str.charCodeAt(i)
-    hash = hash & hash
-  }
-  return Math.abs(hash)
-}
-
-const getNicknameColor = (nickname: string): string => {
-  const index = hashString(nickname) % NICKNAME_COLORS.length
-  return NICKNAME_COLORS[index] ?? THEME.foreground
-}
 
 interface ChatPaneProps {
   width: number
@@ -66,6 +52,10 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
     return { timestamp, username, msg }
   }
 
+  // Collect all member nicks for inline coloring — stable reference via useMemo would be ideal
+  // but for a terminal app the re-render cost is negligible
+  const channelUsernames = currentChannel?.users.map((u) => u.username) ?? []
+
   const renderMessage = (msg: Message) => {
     const { timestamp, username } = formatMessage(msg)
     const nicknameColor = getNicknameColor(username)
@@ -78,7 +68,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
             <span fg={nicknameColor}> {username}</span>
             <span fg={THEME.mutedText}> › </span>
             <span fg={THEME.foreground}>
-              {renderIrcText(msg.content, msg.id, currentServer?.nickname)}
+              {renderIrcText(msg.content, msg.id, currentServer?.nickname, channelUsernames)}
             </span>
           </text>
         )
@@ -87,7 +77,10 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
           <text>
             <span fg={THEME.dimText}>[{timestamp}]</span>
             <span fg={COLORS.magenta}> * {username}</span>
-            <span fg={COLORS.magenta}> {msg.content}</span>
+            <span fg={COLORS.magenta}>
+              {' '}
+              {renderIrcText(msg.content, msg.id, currentServer?.nickname, channelUsernames)}
+            </span>
           </text>
         )
       case 'notice':
