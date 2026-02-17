@@ -44,22 +44,27 @@ export function registerMessageActions(registry: ActionRegistry<AppStore>) {
         'privateChat:',
         privateChat
       )
+      const hasEchoMessage = currentServer.capabilities?.includes('echo-message') ?? false
+
       if (privateChat) {
         ircClient.sendRaw(currentServer.id, `PRIVMSG ${privateChat.username} :${content}`)
         debugLog?.('Sent private message to', privateChat.username, 'with content:', content)
-        const localMessage: Message = {
-          id: uuidv4(),
-          type: 'message',
-          content,
-          timestamp: new Date(),
-          userId: currentServer.nickname,
-          channelId: privateChat.id,
-          serverId: currentServer.id,
-          reactions: [],
-          replyMessage: null,
-          mentioned: [],
+        // Server will echo the message back via USERMSG if echo-message is active
+        if (!hasEchoMessage) {
+          const localMessage: Message = {
+            id: uuidv4(),
+            type: 'message',
+            content,
+            timestamp: new Date(),
+            userId: currentServer.nickname,
+            channelId: privateChat.id,
+            serverId: currentServer.id,
+            reactions: [],
+            replyMessage: null,
+            mentioned: [],
+          }
+          store.addMessage(privateChat.id, localMessage)
         }
-        store.addMessage(privateChat.id, localMessage)
         return
       }
 
@@ -69,19 +74,22 @@ export function registerMessageActions(registry: ActionRegistry<AppStore>) {
 
       ircClient.sendMessage(currentServer.id, currentChannel.id, content)
 
-      const localMessage: Message = {
-        id: uuidv4(),
-        type: 'message',
-        content,
-        timestamp: new Date(),
-        userId: currentServer.nickname,
-        channelId: currentChannel.id,
-        serverId: currentServer.id,
-        reactions: [],
-        replyMessage: null,
-        mentioned: [],
+      // Server will echo the message back via CHANMSG if echo-message is active
+      if (!hasEchoMessage) {
+        const localMessage: Message = {
+          id: uuidv4(),
+          type: 'message',
+          content,
+          timestamp: new Date(),
+          userId: currentServer.nickname,
+          channelId: currentChannel.id,
+          serverId: currentServer.id,
+          reactions: [],
+          replyMessage: null,
+          mentioned: [],
+        }
+        store.addMessage(currentChannel.id, localMessage)
       }
-      store.addMessage(currentChannel.id, localMessage)
     },
   })
 

@@ -174,6 +174,8 @@ export class CommandParser {
           return { success: false, message: 'Not connected to a server' }
         }
 
+        const hasEchoMessage = currentServer.capabilities?.includes('echo-message') ?? false
+
         const privateChat = currentServer.privateChats.find(
           (pc) => pc.id === ctx.store.currentChannelId
         )
@@ -183,18 +185,20 @@ export class CommandParser {
             currentServer.id,
             `PRIVMSG ${privateChat.username} :\u0001ACTION ${action}\u0001`
           )
-          ctx.store.addMessage(privateChat.id, {
-            id: uuidv4(),
-            type: 'action',
-            content: action,
-            timestamp: new Date(),
-            userId: currentServer.nickname,
-            channelId: privateChat.id,
-            serverId: currentServer.id,
-            reactions: [],
-            replyMessage: null,
-            mentioned: [],
-          })
+          if (!hasEchoMessage) {
+            ctx.store.addMessage(privateChat.id, {
+              id: uuidv4(),
+              type: 'action',
+              content: action,
+              timestamp: new Date(),
+              userId: currentServer.nickname,
+              channelId: privateChat.id,
+              serverId: currentServer.id,
+              reactions: [],
+              replyMessage: null,
+              mentioned: [],
+            })
+          }
           return { success: true }
         }
 
@@ -202,18 +206,20 @@ export class CommandParser {
           return { success: false, message: 'No channel selected' }
         }
         ircClient.sendMessage(currentServer.id, currentChannel.id, `\u0001ACTION ${action}\u0001`)
-        ctx.store.addMessage(currentChannel.id, {
-          id: uuidv4(),
-          type: 'action',
-          content: action,
-          timestamp: new Date(),
-          userId: currentServer.nickname,
-          channelId: currentChannel.id,
-          serverId: currentServer.id,
-          reactions: [],
-          replyMessage: null,
-          mentioned: [],
-        })
+        if (!hasEchoMessage) {
+          ctx.store.addMessage(currentChannel.id, {
+            id: uuidv4(),
+            type: 'action',
+            content: action,
+            timestamp: new Date(),
+            userId: currentServer.nickname,
+            channelId: currentChannel.id,
+            serverId: currentServer.id,
+            reactions: [],
+            replyMessage: null,
+            mentioned: [],
+          })
+        }
         return { success: true }
       },
     })
@@ -306,6 +312,90 @@ export class CommandParser {
         }
         ctx.ircClient.sendRaw(ctx.currentServer.id, 'AWAY')
         return { success: true, message: 'Marked as back' }
+      },
+    })
+
+    this.register({
+      name: 'clear',
+      aliases: ['cls'],
+      description: 'Clear all messages in the current buffer',
+      usage: '/clear',
+      minArgs: 0,
+      maxArgs: 0,
+      execute: async (_, ctx) => {
+        const channelId = ctx.currentChannel?.id ?? ctx.store.currentChannelId
+        if (!channelId) {
+          return { success: false, message: 'No active buffer to clear' }
+        }
+        ctx.store.clearMessages(channelId)
+        return { success: true }
+      },
+    })
+
+    this.register({
+      name: 'history',
+      aliases: [],
+      description: 'Fetch chat history for the current channel',
+      usage: '/history [count]',
+      minArgs: 0,
+      maxArgs: 1,
+      execute: async (args, ctx) => {
+        if (!ctx.currentServer || !ctx.ircClient) {
+          return { success: false, message: 'Not connected to a server' }
+        }
+        if (!ctx.currentChannel) {
+          return { success: false, message: 'No active channel' }
+        }
+        const count = args[0] ? parseInt(args[0], 10) : 100
+        if (isNaN(count) || count < 1) {
+          return { success: false, message: 'Count must be a positive number' }
+        }
+        ctx.ircClient.sendRaw(
+          ctx.currentServer.id,
+          `CHATHISTORY LATEST ${ctx.currentChannel.name} * ${count}`
+        )
+        return { success: true }
+      },
+    })
+
+    this.register({
+      name: 'whisper',
+      aliases: ['w'],
+      description: 'Send an inline private whisper to a user in the current channel',
+      usage: '/whisper <nick> <message>',
+      minArgs: 2,
+      execute: async (args, ctx) => {
+        const [target, ...messageParts] = args
+        const content = messageParts.join(' ')
+        if (!ctx.currentServer || !ctx.ircClient) {
+          return { success: false, message: 'Not connected to a server' }
+        }
+        if (!ctx.currentChannel) {
+          return { success: false, message: 'No active channel' }
+        }
+        ;(ctx.ircClient as any).sendWhisper(
+          ctx.currentServer.id,
+          target,
+          ctx.currentChannel.name,
+          content
+        )
+        // If echo-message is active the server will echo our PRIVMSG back through
+        // the USERMSG handler which will show it in the channel. Otherwise add locally.
+        if (!ctx.currentServer.capabilities?.includes('echo-message')) {
+          ctx.store.addMessage(ctx.currentChannel.id, {
+            id: uuidv4(),
+            type: 'whisper',
+            content: `→ ${target}: ${content}`,
+            timestamp: new Date(),
+            userId: ctx.currentServer.nickname,
+            channelId: ctx.currentChannel.id,
+            serverId: ctx.currentServer.id,
+            reactions: [],
+            replyMessage: null,
+            mentioned: [],
+          })
+        }
+        return { success: true }
       },
     })
   }

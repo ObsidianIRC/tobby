@@ -36,4 +36,6 @@ export class MockIRCClient extends EventEmitter {
   leaveChannel(_serverId: string, _channel: string) {}
   sendMessage(_serverId: string, _channel: string, _message: string) {}
   sendRaw(_serverId: string, _command: string) {}
+  sendWhisper(_serverId: string, _target: string, _channel: string, _content: string) {}
+  sendTyping(_serverId: string, _target: string, _isActive: boolean) {}
 }

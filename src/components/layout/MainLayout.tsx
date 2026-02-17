@@ -4,6 +4,7 @@ import { ChatPane } from './ChatPane'
 import { MemberPane } from './MemberPane'
 import { StatusBar } from '../ui/StatusBar'
 import { CommandInput } from '../ui/CommandInput'
+import { TypingIndicator } from '../ui/TypingIndicator'
 import { QuickActionsMenu } from '../modals/QuickActionsMenu'
 import { ConnectServerModal } from '../modals/ConnectServerModal'
 import { RemoveServerModal } from '../modals/RemoveServerModal'
@@ -22,8 +23,9 @@ export function MainLayout() {
   const chatPaneWidth = innerWidth - serverPaneWidth - memberPaneWidth
 
   const commandInputHeight = 2
+  const typingIndicatorHeight = 1
   const statusBarHeight = 1
-  const contentHeight = height - 2 - commandInputHeight - statusBarHeight
+  const contentHeight = height - 2 - commandInputHeight - typingIndicatorHeight - statusBarHeight
 
   return (
     <box width={width} height={height} flexDirection="column">
@@ -52,6 +54,8 @@ export function MainLayout() {
             />
           )}
         </box>
+
+        <TypingIndicator width={innerWidth} />
 
         <CommandInput width={innerWidth} />
 

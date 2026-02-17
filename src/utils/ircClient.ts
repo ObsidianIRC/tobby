@@ -42,6 +42,7 @@ export class IRCClient extends BaseIRCClient {
       isConnected: false,
       connectionState: 'connecting',
       users: [],
+      capabilities: [],
     }
 
     // Store the server and socket
@@ -69,14 +70,12 @@ export class IRCClient extends BaseIRCClient {
     // Set up socket handlers to match BaseIRCClient behavior
     nodeSocket.onopen = () => {
       debugLog?.(`[IRC] Socket opened for ${host}:${port}`)
+      nodeSocket.send('CAP LS 302')
       if (password) {
         nodeSocket.send(`PASS ${password}`)
       }
-
       nodeSocket.send(`NICK ${nickname}`)
-
-      const username = nickname.replace(/[^a-zA-Z0-9]/g, '').substring(0, 9)
-      nodeSocket.send(`USER ${username} 0 * :${nickname}`)
+      // USER is sent by the base class after CAP negotiation completes (userOnConnect)
     }
 
     nodeSocket.onmessage = (event) => {

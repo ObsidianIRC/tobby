@@ -155,6 +155,16 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
             <span fg={THEME.foreground}>{msg.content}</span>
           </text>
         )
+      case 'whisper':
+        return (
+          <text>
+            <span fg={THEME.dimText}>[{timestamp}]</span>
+            <span fg={COLORS.magenta}> ✉ </span>
+            <span fg={getNicknameColor(username)}>{username}</span>
+            <span fg={COLORS.magenta}> › </span>
+            <span fg={COLORS.magenta}>{msg.content}</span>
+          </text>
+        )
       case 'system':
         return (
           <text>

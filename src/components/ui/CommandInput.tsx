@@ -3,6 +3,7 @@ import { useKeyboard } from '@opentui/react'
 import { useAppContext } from '../../context/AppContext'
 import { useStore } from '../../store'
 import { CommandParser } from '../../services/commands'
+import { useTypingIndicator } from '../../hooks/useTypingIndicator'
 import { THEME } from '../../constants/theme'
 
 interface CommandInputProps {
@@ -21,6 +22,9 @@ const COMMANDS = [
   'quit',
   'whois',
   'away',
+  'history',
+  'whisper',
+  'clear',
 ]
 
 export function CommandInput({ width }: CommandInputProps) {
@@ -45,6 +49,9 @@ export function CommandInput({ width }: CommandInputProps) {
   const currentPrivateChat = currentServer?.privateChats.find((pc) => pc.id === currentChannelId)
 
   const commandParser = useMemo(() => new CommandParser(registry), [registry])
+
+  // Send typing notifications; the hook watches the raw input and decides when to send
+  useTypingIndicator({ input })
 
   const getPrompt = () => {
     if (currentChannel) {

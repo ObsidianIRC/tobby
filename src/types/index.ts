@@ -74,6 +74,7 @@ export interface Message {
     | 'kick'
     | 'nick'
     | 'mode'
+    | 'whisper'
   tags?: Record<string, string>
   replyTo?: string
   replyMessage: Message | null

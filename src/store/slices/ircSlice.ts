@@ -3,6 +3,7 @@ import type { IRCClient, EventMap } from '@/utils/ircClient'
 import type { AppStore } from '@/store'
 import type { Message, User } from '@/types'
 import { v4 as uuidv4 } from 'uuid'
+import { stripIrcFormatting } from '@irc/messageFormatter'
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -15,12 +16,53 @@ function nickMentioned(text: string, nickname: string): boolean {
 
 export interface IRCSlice {
   ircClient: IRCClient | null
+  typingUsers: Record<string, string[]>
+  setTypingUser: (channelId: string, nick: string) => void
+  clearTypingUser: (channelId: string, nick: string) => void
   initializeIRC: () => void
   setupEventHandlers: () => void
 }
 
+// Module-level timer storage to avoid storing timers in Zustand state
+const typingTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
 export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, get) => ({
   ircClient: null,
+  typingUsers: {},
+
+  setTypingUser: (channelId, nick) => {
+    const key = `${channelId}:${nick}`
+    const existing = typingTimers.get(key)
+    if (existing) clearTimeout(existing)
+
+    set((state) => {
+      const current = state.typingUsers[channelId] ?? []
+      if (current.includes(nick)) return state
+      return { typingUsers: { ...state.typingUsers, [channelId]: [...current, nick] } }
+    })
+
+    typingTimers.set(
+      key,
+      setTimeout(() => {
+        get().clearTypingUser(channelId, nick)
+      }, 30000)
+    )
+  },
+
+  clearTypingUser: (channelId, nick) => {
+    const key = `${channelId}:${nick}`
+    const existing = typingTimers.get(key)
+    if (existing) {
+      clearTimeout(existing)
+      typingTimers.delete(key)
+    }
+    set((state) => {
+      const current = state.typingUsers[channelId] ?? []
+      const filtered = current.filter((n) => n !== nick)
+      if (filtered.length === current.length) return state
+      return { typingUsers: { ...state.typingUsers, [channelId]: filtered } }
+    })
+  },
 
   initializeIRC: () => {
     // Dynamic import to avoid loading IRC client during module initialization
@@ -85,14 +127,46 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       }
     )
 
+    // Sync negotiated capabilities to store
+    ircClient.on('CAP ACK', (data: EventMap['CAP ACK']) => {
+      const { getServer, updateServer } = get()
+      const server = getServer(data.serverId)
+      if (!server) return
+      const caps = data.cliCaps.split(' ').filter(Boolean)
+      const merged = [...new Set([...(server.capabilities || []), ...caps])]
+      updateServer(data.serverId, { capabilities: merged })
+    })
+
+    // Typing notifications
+    ircClient.on('TAGMSG', (data: EventMap['TAGMSG']) => {
+      const { getServer, setTypingUser, clearTypingUser } = get()
+      const server = getServer(data.serverId)
+      if (!server) return
+
+      const typingValue = data.mtags?.['+typing']
+      if (!typingValue) return
+
+      const channel = server.channels.find((c) => c.name === data.channelName)
+      if (!channel) return
+
+      if (typingValue === 'done') {
+        clearTypingUser(channel.id, data.sender)
+      } else {
+        setTypingUser(channel.id, data.sender)
+      }
+    })
+
     // Channel message
     ircClient.on('CHANMSG', (data: EventMap['CHANMSG']) => {
-      const { getServer, updateChannel, addMessage } = get()
+      const { getServer, updateChannel, addMessage, clearTypingUser } = get()
       const server = getServer(data.serverId)
       if (!server) return
 
       const channel = server.channels.find((c) => c.name === data.channelName)
       if (!channel) return
+
+      // Message received — sender is no longer typing
+      clearTypingUser(channel.id, data.sender)
 
       const isAction = data.message.startsWith('\x01ACTION ') && data.message.endsWith('\x01')
       const content = isAction ? data.message.slice(8, -1) : data.message
@@ -115,18 +189,21 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
 
       addMessage(channel.id, message)
 
-      const { currentChannelId } = get()
-      const mentioned = nickMentioned(data.message, server.nickname)
+      const isHistorical = !!data.mtags?.batch
+      if (!isHistorical) {
+        const { currentChannelId } = get()
+        const mentioned = nickMentioned(data.message, server.nickname)
 
-      if (currentChannelId !== channel.id) {
-        updateChannel(data.serverId, channel.id, {
-          unreadCount: channel.unreadCount + 1,
-          ...(mentioned && { isMentioned: true }),
-        })
-      }
+        if (currentChannelId !== channel.id) {
+          updateChannel(data.serverId, channel.id, {
+            unreadCount: channel.unreadCount + 1,
+            ...(mentioned && { isMentioned: true }),
+          })
+        }
 
-      if (mentioned) {
-        process.stdout.write('\x07')
+        if (mentioned) {
+          process.stdout.write('\x07')
+        }
       }
     })
 
@@ -136,7 +213,47 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       const server = getServer(data.serverId)
       if (!server) return
 
-      // Find or create private chat
+      const channelContext = data.mtags?.['+draft/channel-context']
+      if (channelContext) {
+        // Inline whisper — route to the channel it belongs to
+        const channel = server.channels.find((c) => c.name === channelContext)
+        if (!channel) return
+
+        const cleanContent = stripIrcFormatting(data.message)
+        // For an echo of our own outgoing whisper, encode the target so the
+        // display can show direction (→ target: message). For incoming
+        // whispers the sender is shown via userId so content stays clean.
+        const isSentByUs = data.sender === server.nickname
+        const content = isSentByUs ? `→ ${data.target}: ${cleanContent}` : cleanContent
+
+        const message: Message = {
+          id: uuidv4(),
+          msgid: data.mtags?.msgid,
+          type: 'whisper',
+          content,
+          timestamp: data.timestamp,
+          userId: data.sender,
+          channelId: channel.id,
+          serverId: data.serverId,
+          reactions: [],
+          replyMessage: null,
+          mentioned: [],
+          tags: data.mtags,
+        }
+        addMessage(channel.id, message)
+
+        if (currentChannelId !== channel.id) {
+          const { updateChannel } = get()
+          updateChannel(data.serverId, channel.id, {
+            unreadCount: channel.unreadCount + 1,
+            isMentioned: true,
+          })
+        }
+        process.stdout.write('\x07')
+        return
+      }
+
+      // Regular private message
       let privateChat = server.privateChats.find((pc) => pc.username === data.sender)
       if (!privateChat) {
         privateChat = {
@@ -170,15 +287,17 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
 
       addMessage(privateChat.id, message)
 
-      // Increment unread if not currently viewing this chat
-      if (currentChannelId !== privateChat.id) {
-        updatePrivateChat(data.serverId, privateChat.id, {
-          unreadCount: privateChat.unreadCount + 1,
-          isMentioned: true,
-        })
-      }
+      const isHistorical = !!data.mtags?.batch
+      if (!isHistorical) {
+        if (currentChannelId !== privateChat.id) {
+          updatePrivateChat(data.serverId, privateChat.id, {
+            unreadCount: privateChat.unreadCount + 1,
+            isMentioned: true,
+          })
+        }
 
-      process.stdout.write('\x07')
+        process.stdout.write('\x07')
+      }
     })
 
     // User join
@@ -457,18 +576,21 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
 
       addMessage(channel.id, message)
 
-      const { currentChannelId, updateChannel } = get()
-      const mentioned = nickMentioned(fullText, server.nickname)
+      const isHistorical = !!data.mtags?.batch
+      if (!isHistorical) {
+        const { currentChannelId, updateChannel } = get()
+        const mentioned = nickMentioned(fullText, server.nickname)
 
-      if (currentChannelId !== channel.id) {
-        updateChannel(data.serverId, channel.id, {
-          unreadCount: channel.unreadCount + 1,
-          ...(mentioned && { isMentioned: true }),
-        })
-      }
+        if (currentChannelId !== channel.id) {
+          updateChannel(data.serverId, channel.id, {
+            unreadCount: channel.unreadCount + 1,
+            ...(mentioned && { isMentioned: true }),
+          })
+        }
 
-      if (mentioned) {
-        process.stdout.write('\x07')
+        if (mentioned) {
+          process.stdout.write('\x07')
+        }
       }
     })
 

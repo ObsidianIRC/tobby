@@ -89,11 +89,16 @@ test('should connect to IRC server, join channel, and receive messages', async (
     console.error('[TEST] ❌ Test failed:', err)
     throw err
   } finally {
-    // Cleanup: disconnect
+    // Cleanup: disconnect and remove server from internal state
     try {
       console.log('[TEST] Disconnecting...')
       client.disconnect(serverId)
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // Remove server from internal maps so no lingering state
+      ;(client as any).servers.delete(serverId)
+      ;(client as any).sockets.delete(serverId)
+      ;(client as any).nicks.delete(serverId)
+      ;(client as any).currentUsers?.delete(serverId)
+      await new Promise((resolve) => setTimeout(resolve, 500))
     } catch (e) {
       console.error('[TEST] Error during cleanup:', e)
     }

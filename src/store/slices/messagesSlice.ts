@@ -17,7 +17,19 @@ export const createMessagesSlice: StateCreator<MessagesSlice> = (set, get) => ({
     set((state) => {
       const newMessages = new Map(state.messages)
       const existing = newMessages.get(channelId) || []
-      newMessages.set(channelId, [...existing, message])
+
+      // Deduplicate by msgid — repeated /history calls bring the same messages
+      // back with the same msgid, so we skip them instead of double-inserting.
+      // Messages without a msgid (system events, old servers) are always inserted.
+      if (message.msgid && existing.some((m) => m.msgid === message.msgid)) {
+        return state
+      }
+
+      const merged = [...existing, message]
+      // Sort by server-time timestamp so history blocks slot into the correct
+      // chronological position relative to live messages and each other.
+      merged.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+      newMessages.set(channelId, merged)
       return { messages: newMessages }
     }),
 

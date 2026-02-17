@@ -3,11 +3,11 @@ import { useAppContext } from '../context/AppContext'
 import { useStore } from '../store'
 
 interface UseTypingIndicatorOptions {
-  isTyping: boolean
+  input: string
   debounceMs?: number
 }
 
-export function useTypingIndicator({ isTyping, debounceMs = 3000 }: UseTypingIndicatorOptions) {
+export function useTypingIndicator({ input, debounceMs = 3000 }: UseTypingIndicatorOptions) {
   const { registry, ircClient, renderer } = useAppContext()
   const store = useStore()
   const timeoutRef = useRef<Timer | null>(null)
@@ -21,33 +21,34 @@ export function useTypingIndicator({ isTyping, debounceMs = 3000 }: UseTypingInd
 
     if (!currentServer || !currentChannel) return
 
-    if (isTyping && !isActiveRef.current) {
-      isActiveRef.current = true
+    // Only send typing notifications for regular messages, not commands
+    const isTyping = input.length > 0 && !input.startsWith('/')
 
-      const context = {
-        store,
-        ircClient,
-        currentServer,
-        currentChannel,
-        renderer,
+    const context = { store, ircClient, currentServer, currentChannel, renderer }
+
+    if (isTyping) {
+      if (!isActiveRef.current) {
+        isActiveRef.current = true
+        registry.execute('message.typing', context, true)
       }
-
-      registry.execute('message.typing', context, true)
-
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-      }
-
+      // Reset the debounce timer on every keystroke
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
       timeoutRef.current = setTimeout(() => {
         isActiveRef.current = false
         registry.execute('message.typing', context, false)
       }, debounceMs)
+    } else if (isActiveRef.current) {
+      // Input was cleared — send done immediately
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
+      isActiveRef.current = false
+      registry.execute('message.typing', context, false)
     }
 
     return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-      }
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
     }
-  }, [isTyping, ircClient, store, registry, renderer, debounceMs])
+  }, [input, ircClient, store, registry, renderer, debounceMs])
 }
