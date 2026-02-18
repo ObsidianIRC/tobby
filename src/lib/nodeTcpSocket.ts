@@ -52,7 +52,7 @@ export class NodeTCPSocket implements ISocket {
 
     this.socket.on('data', (data: Buffer) => {
       const text = data.toString('utf-8')
-      globalThis.debugLog?.(`[Socket] data from ${host}: ${text.substring(0, 200)}`)
+      globalThis.debugLog?.(`[Socket] data from ${host}: ${text.substring(0, 500)}`)
       this.onmessage?.({ data: text })
     })
 

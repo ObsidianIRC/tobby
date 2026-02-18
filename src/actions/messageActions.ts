@@ -325,7 +325,15 @@ export function registerMessageActions(registry: ActionRegistry<AppStore>) {
     priority: 70,
 
     isEnabled: (ctx) => {
-      return !!ctx.currentChannel && !!ctx.currentServer?.capabilities?.includes('draft/typing')
+      // `+typing` is a client-only tag relayed by any server that supports message-tags,
+      // even if the server doesn't explicitly advertise draft/typing in its CAP LS.
+      return (
+        !!ctx.currentChannel &&
+        !!(
+          ctx.currentServer?.capabilities?.includes('draft/typing') ||
+          ctx.currentServer?.capabilities?.includes('message-tags')
+        )
+      )
     },
 
     isVisible: () => false, // Hidden, used programmatically

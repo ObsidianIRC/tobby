@@ -146,6 +146,9 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       const typingValue = data.mtags?.['+typing']
       if (!typingValue) return
 
+      // Ignore our own typing echoes (server relays our own TAGMSG back to us)
+      if (server.nickname && data.sender.toLowerCase() === server.nickname.toLowerCase()) return
+
       const channel = server.channels.find((c) => c.name === data.channelName)
       if (!channel) return
 

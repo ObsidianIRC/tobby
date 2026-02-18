@@ -140,6 +140,15 @@ export function CommandInput({ width }: CommandInputProps) {
       }
       return
     }
+
+    // Ctrl+U clears the line in the terminal widget but may not fire onInput.
+    // Explicitly sync React state so the typing indicator sends done.
+    if (key.ctrl && key.name === 'u') {
+      setInput('')
+      setHistoryIndex(-1)
+      resetCompletion()
+      return
+    }
   })
 
   const handleInput = (value: string) => {
