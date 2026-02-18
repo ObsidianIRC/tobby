@@ -137,25 +137,47 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       updateServer(data.serverId, { capabilities: merged })
     })
 
-    // Typing notifications
+    // Typing notifications and reactions
     ircClient.on('TAGMSG', (data: EventMap['TAGMSG']) => {
-      const { getServer, setTypingUser, clearTypingUser } = get()
+      const { getServer, setTypingUser, clearTypingUser, updateMessage, messages } = get()
       const server = getServer(data.serverId)
       if (!server) return
 
-      const typingValue = data.mtags?.['+typing']
-      if (!typingValue) return
-
-      // Ignore our own typing echoes (server relays our own TAGMSG back to us)
-      if (server.nickname && data.sender.toLowerCase() === server.nickname.toLowerCase()) return
-
       const channel = server.channels.find((c) => c.name === data.channelName)
-      if (!channel) return
 
-      if (typingValue === 'done') {
-        clearTypingUser(channel.id, data.sender)
-      } else {
-        setTypingUser(channel.id, data.sender)
+      const typingValue = data.mtags?.['+typing']
+      if (typingValue) {
+        // Ignore our own typing echoes (server relays our own TAGMSG back to us)
+        if (server.nickname && data.sender.toLowerCase() === server.nickname.toLowerCase()) return
+        if (!channel) return
+
+        if (typingValue === 'done') {
+          clearTypingUser(channel.id, data.sender)
+        } else {
+          setTypingUser(channel.id, data.sender)
+        }
+        return
+      }
+
+      const reactEmoji = data.mtags?.['+draft/react']
+      const unreactEmoji = data.mtags?.['+draft/unreact']
+      const targetMsgId = data.mtags?.['+draft/reply']
+
+      if ((reactEmoji || unreactEmoji) && targetMsgId && channel) {
+        const msgs = messages.get(channel.id) ?? []
+        const target = msgs.find((m) => m.msgid === targetMsgId)
+        if (!target) return
+
+        const emoji = (reactEmoji ?? unreactEmoji)!
+        const existing = target.reactions
+
+        const newReactions = reactEmoji
+          ? existing.some((r) => r.emoji === emoji && r.userId === data.sender)
+            ? existing
+            : [...existing, { emoji, userId: data.sender }]
+          : existing.filter((r) => !(r.emoji === emoji && r.userId === data.sender))
+
+        updateMessage(channel.id, target.id, { reactions: newReactions })
       }
     })
 
@@ -171,9 +193,18 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       // Message received — sender is no longer typing
       clearTypingUser(channel.id, data.sender)
 
+      // HistServ (and similar bots) relay TAGMSG events as plain text ("X sent a TAGMSG").
+      // These are pure noise — suppress them.
+      if (/\bsent a TAGMSG\b/i.test(data.message)) return
+
       const isAction = data.message.startsWith('\x01ACTION ') && data.message.endsWith('\x01')
       const content = isAction ? data.message.slice(8, -1) : data.message
       const type = isAction ? 'action' : 'message'
+
+      const replyMsgId = data.mtags?.['+draft/reply']
+      const replyMessage = replyMsgId
+        ? ((get().messages.get(channel.id) ?? []).find((m) => m.msgid === replyMsgId) ?? null)
+        : null
 
       const message: Message = {
         id: uuidv4(),
@@ -185,7 +216,7 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
         channelId: channel.id,
         serverId: data.serverId,
         reactions: [],
-        replyMessage: null,
+        replyMessage,
         mentioned: [],
         tags: data.mtags,
       }
@@ -257,11 +288,16 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       }
 
       // Regular private message
-      let privateChat = server.privateChats.find((pc) => pc.username === data.sender)
+      // When echo-message reflects our own outgoing PM back, sender is us and target is the recipient.
+      const chatPartner =
+        data.sender.toLowerCase() === server.nickname.toLowerCase() ? data.target : data.sender
+      if (!chatPartner || chatPartner.toLowerCase() === server.nickname.toLowerCase()) return
+
+      let privateChat = server.privateChats.find((pc) => pc.username === chatPartner)
       if (!privateChat) {
         privateChat = {
           id: uuidv4(),
-          username: data.sender,
+          username: chatPartner,
           serverId: data.serverId,
           unreadCount: 0,
           isMentioned: false,
@@ -273,6 +309,11 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       const msgContent = isAction ? data.message.slice(8, -1) : data.message
       const msgType = isAction ? 'action' : 'message'
 
+      const pmReplyMsgId = data.mtags?.['+draft/reply']
+      const pmReplyMessage = pmReplyMsgId
+        ? ((get().messages.get(privateChat.id) ?? []).find((m) => m.msgid === pmReplyMsgId) ?? null)
+        : null
+
       const message: Message = {
         id: uuidv4(),
         msgid: data.mtags?.msgid,
@@ -283,7 +324,7 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
         channelId: privateChat.id,
         serverId: data.serverId,
         reactions: [],
-        replyMessage: null,
+        replyMessage: pmReplyMessage,
         mentioned: [],
         tags: data.mtags,
       }
@@ -312,18 +353,22 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       const channel = server.channels.find((c) => c.name === data.channelName)
       if (!channel) return
 
-      const user: User = {
-        id: uuidv4(),
-        username: data.username,
-        isOnline: true,
-        status: 'online',
-        account: data.account,
-        realname: data.realname,
+      // Self-join: clear users list so the incoming 353/NAMES events populate it cleanly
+      if (data.username === server.nickname) {
+        updateChannel(data.serverId, channel.id, { users: [] })
+      } else {
+        const user: User = {
+          id: uuidv4(),
+          username: data.username,
+          isOnline: true,
+          status: 'online',
+          account: data.account,
+          realname: data.realname,
+        }
+        updateChannel(data.serverId, channel.id, {
+          users: [...channel.users, user],
+        })
       }
-
-      updateChannel(data.serverId, channel.id, {
-        users: [...channel.users, user],
-      })
 
       // Add system message
       const { addMessage } = get()
@@ -510,8 +555,12 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
         realname: ircUser.realname,
       }))
 
+      // Merge with existing users — IRC sends 353 in multiple chunks; each fires a NAMES event.
+      // Replacing on every chunk would discard all but the last batch.
+      const existingUsernames = new Set(channel.users.map((u) => u.username))
+      const toAdd = users.filter((u) => !existingUsernames.has(u.username))
       updateChannel(data.serverId, channel.id, {
-        users,
+        users: [...channel.users, ...toAdd],
       })
     })
 
@@ -544,56 +593,70 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
 
     // Multiline message
     ircClient.on('MULTILINE_MESSAGE', (data: EventMap['MULTILINE_MESSAGE']) => {
-      const { getServer, addMessage } = get()
-      const server = getServer(data.serverId)
-      if (!server) return
+      try {
+        const { getServer, addMessage, clearTypingUser } = get()
+        const server = getServer(data.serverId)
+        if (!server) return
 
-      const channel = data.channelName
-        ? server.channels.find((c) => c.name === data.channelName)
-        : undefined
+        const channel = data.channelName
+          ? server.channels.find((c) => c.name === data.channelName)
+          : undefined
 
-      if (!channel) return
+        if (!channel) return
 
-      const fullText = data.lines.join('\n')
-      const isAction =
-        data.lines[0]?.startsWith('\x01ACTION ') &&
-        data.lines[data.lines.length - 1]?.endsWith('\x01')
-      const content = isAction ? fullText.slice(8, -1) : fullText
-      const type = isAction ? 'action' : 'message'
+        // Multiline message received — sender is no longer typing
+        clearTypingUser(channel.id, data.sender)
 
-      const message: Message = {
-        id: uuidv4(),
-        msgid: data.mtags?.msgid,
-        multilineMessageIds: data.messageIds,
-        type,
-        content,
-        timestamp: data.timestamp,
-        userId: data.sender,
-        channelId: channel.id,
-        serverId: data.serverId,
-        reactions: [],
-        replyMessage: null,
-        mentioned: [],
-        tags: data.mtags,
-      }
+        const fullText = data.lines.join('\n')
+        const isAction =
+          data.lines[0]?.startsWith('\x01ACTION ') &&
+          data.lines[data.lines.length - 1]?.endsWith('\x01')
+        const content = isAction ? fullText.slice(8, -1) : fullText
+        const type = isAction ? 'action' : 'message'
 
-      addMessage(channel.id, message)
+        const replyMsgId = data.mtags?.['+draft/reply']
+        const replyMessage = replyMsgId
+          ? ((get().messages.get(channel.id) ?? []).find((m) => m.msgid === replyMsgId) ?? null)
+          : null
 
-      const isHistorical = !!data.mtags?.batch
-      if (!isHistorical) {
-        const { currentChannelId, updateChannel } = get()
-        const mentioned = nickMentioned(fullText, server.nickname)
-
-        if (currentChannelId !== channel.id) {
-          updateChannel(data.serverId, channel.id, {
-            unreadCount: channel.unreadCount + 1,
-            ...(mentioned && { isMentioned: true }),
-          })
+        const message: Message = {
+          id: uuidv4(),
+          msgid: data.mtags?.msgid,
+          multilineMessageIds: data.messageIds,
+          isMultiline: true,
+          lines: data.lines,
+          type,
+          content,
+          timestamp: data.timestamp,
+          userId: data.sender,
+          channelId: channel.id,
+          serverId: data.serverId,
+          reactions: [],
+          replyMessage,
+          mentioned: [],
+          tags: data.mtags,
         }
 
-        if (mentioned) {
-          process.stdout.write('\x07')
+        addMessage(channel.id, message)
+
+        const isHistorical = !!data.mtags?.batch
+        if (!isHistorical) {
+          const { currentChannelId, updateChannel } = get()
+          const mentioned = nickMentioned(fullText, server.nickname)
+
+          if (currentChannelId !== channel.id) {
+            updateChannel(data.serverId, channel.id, {
+              unreadCount: channel.unreadCount + 1,
+              ...(mentioned && { isMentioned: true }),
+            })
+          }
+
+          if (mentioned) {
+            process.stdout.write('\x07')
+          }
         }
+      } catch (error) {
+        debugLog?.('MULTILINE_MESSAGE handler error:', error)
       }
     })
 

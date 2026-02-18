@@ -79,7 +79,14 @@ export class IRCClient extends BaseIRCClient {
     }
 
     nodeSocket.onmessage = (event) => {
-      ;(this as any).handleMessage(event.data, server.id)
+      // Feed lines one-at-a-time so the base class's `return` inside the PRIVMSG
+      // batch handler doesn't drop subsequent lines in the same TCP data buffer.
+      const rawLines = event.data.split('\r\n')
+      for (const rawLine of rawLines) {
+        if (rawLine.trim()) {
+          ;(this as any).handleMessage(rawLine + '\r\n', server.id)
+        }
+      }
 
       const lines = event.data.split('\r\n')
       for (const line of lines) {

@@ -1,5 +1,6 @@
 import { useKeyboard } from '@opentui/react'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+import Fuse from 'fuse.js'
 import { ModalShell } from './ModalShell'
 import { THEME } from '../../constants/theme'
 
@@ -40,7 +41,18 @@ export function ListModal({
 
   const modalWidth = Math.min(60, width - 4)
   const modalHeight = Math.min(20, height - 4)
-  const visibleItems = items.slice(0, modalHeight - 5)
+
+  const fuse = useMemo(
+    () => new Fuse(items, { keys: ['label', 'sublabel'], threshold: 0.4 }),
+    [items]
+  )
+
+  const filteredItems = useMemo(() => {
+    if (!query) return items
+    return fuse.search(query).map((r) => r.item)
+  }, [query, items, fuse])
+
+  const visibleItems = filteredItems.slice(0, modalHeight - 5)
 
   useKeyboard((key) => {
     if (key.name === 'escape') {
@@ -77,6 +89,12 @@ export function ListModal({
 
     if (key.name === 'backspace') {
       onQueryChange(query.slice(0, -1))
+      setSelectedIndex(0)
+      return
+    }
+
+    if (key.name === 'delete') {
+      onQueryChange('')
       setSelectedIndex(0)
       return
     }

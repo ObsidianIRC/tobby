@@ -129,6 +129,8 @@ export interface UIState {
   terminalHeight: number
   currentServerId: string | null
   currentChannelId: string | null
+  quitWarning: string | null
+  inputLineCount: number
 }
 
 export interface Settings {

@@ -46,8 +46,14 @@ export function registerMessageActions(registry: ActionRegistry<AppStore>) {
       )
       const hasEchoMessage = currentServer.capabilities?.includes('echo-message') ?? false
 
+      const replyingTo = (store as any).replyingTo as Message | null
+      const replyTag = replyingTo?.msgid ? `@+draft/reply=${replyingTo.msgid} ` : ''
+
       if (privateChat) {
-        ircClient.sendRaw(currentServer.id, `PRIVMSG ${privateChat.username} :${content}`)
+        ircClient.sendRaw(
+          currentServer.id,
+          `${replyTag}PRIVMSG ${privateChat.username} :${content}`
+        )
         debugLog?.('Sent private message to', privateChat.username, 'with content:', content)
         // Server will echo the message back via USERMSG if echo-message is active
         if (!hasEchoMessage) {
@@ -60,7 +66,7 @@ export function registerMessageActions(registry: ActionRegistry<AppStore>) {
             channelId: privateChat.id,
             serverId: currentServer.id,
             reactions: [],
-            replyMessage: null,
+            replyMessage: replyingTo ?? null,
             mentioned: [],
           }
           store.addMessage(privateChat.id, localMessage)
@@ -72,7 +78,11 @@ export function registerMessageActions(registry: ActionRegistry<AppStore>) {
         throw new Error('No channel selected')
       }
 
-      ircClient.sendMessage(currentServer.id, currentChannel.id, content)
+      if (replyTag) {
+        ircClient.sendRaw(currentServer.id, `${replyTag}PRIVMSG ${currentChannel.name} :${content}`)
+      } else {
+        ircClient.sendMessage(currentServer.id, currentChannel.id, content)
+      }
 
       // Server will echo the message back via CHANMSG if echo-message is active
       if (!hasEchoMessage) {
@@ -85,7 +95,7 @@ export function registerMessageActions(registry: ActionRegistry<AppStore>) {
           channelId: currentChannel.id,
           serverId: currentServer.id,
           reactions: [],
-          replyMessage: null,
+          replyMessage: replyingTo ?? null,
           mentioned: [],
         }
         store.addMessage(currentChannel.id, localMessage)

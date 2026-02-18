@@ -1,9 +1,100 @@
+import { useRef, useEffect } from 'react'
+import type React from 'react'
 import { MacOSScrollAccel } from '@opentui/core'
+import type { ScrollBoxRenderable } from '@opentui/core'
 import { useStore } from '../../store'
 import { THEME, COLORS } from '../../constants/theme'
-import { renderIrcText } from '../../utils/ircFormatting'
+import { renderIrcText, stripIrcFormatting } from '../../utils/ircFormatting'
 import { getNicknameColor } from '../../utils/nickColors'
 import type { Message } from '../../types'
+
+const SELECTABLE_TYPES: Message['type'][] = ['message', 'action']
+
+// [HH:MM] = 7 chars, space = 1, nick = variable, ' › ' = 3
+const contentOffset = (nick: string) => 11 + nick.length
+
+function MultilineMessageView({
+  msg,
+  username,
+  timestamp,
+  offset,
+  isSelected,
+}: {
+  msg: Message
+  username: string
+  timestamp: string
+  offset: number
+  isSelected: boolean
+}) {
+  const lines = msg.lines ?? msg.content.split('\n')
+  const nicknameColor = getNicknameColor(username)
+  const visibleLines = isSelected ? lines : lines.slice(0, 2)
+  const hiddenCount = lines.length - 2
+
+  return (
+    <box flexDirection="column">
+      <text>
+        <span fg={THEME.dimText}>[{timestamp}]</span>
+        <span fg={nicknameColor}> {username}</span>
+        <span fg={THEME.mutedText}> › </span>
+        <span fg={THEME.foreground}>{visibleLines[0] ?? ''}</span>
+      </text>
+      {visibleLines.slice(1).map((line, i) => (
+        <text key={i}>
+          <span fg={THEME.foreground}>
+            {' '.repeat(offset)}
+            {line}
+          </span>
+        </text>
+      ))}
+      {!isSelected && hiddenCount > 0 && (
+        <box paddingLeft={offset}>
+          <text fg={THEME.dimText}>
+            ▾ {hiddenCount} more line{hiddenCount !== 1 ? 's' : ''}
+          </text>
+        </box>
+      )}
+    </box>
+  )
+}
+
+function ReplyPreview({ replyMessage, offset }: { replyMessage: Message; offset: number }) {
+  const raw = stripIrcFormatting(replyMessage.content)
+  const preview = raw.length > 50 ? raw.slice(0, 50) + '…' : raw
+  return (
+    <box paddingLeft={offset}>
+      <text>
+        <span fg={THEME.dimText}>↩ </span>
+        <span fg={THEME.dimText}>{replyMessage.userId}</span>
+        <span fg={THEME.dimText}> › </span>
+        <span fg={THEME.dimText}>{preview}</span>
+      </text>
+    </box>
+  )
+}
+
+function ReactionsRow({
+  reactions,
+  paddingLeft,
+}: {
+  reactions: Message['reactions']
+  paddingLeft: number
+}) {
+  const grouped = reactions.reduce<Record<string, number>>((acc, r) => {
+    acc[r.emoji] = (acc[r.emoji] ?? 0) + 1
+    return acc
+  }, {})
+
+  const parts = Object.entries(grouped)
+    .map(([emoji, count]) => `${emoji} ${count}`)
+    .join('  ')
+
+  return (
+    <box paddingLeft={paddingLeft}>
+      <text fg={THEME.mutedText}>{parts}</text>
+    </box>
+  )
+}
 
 const chatScrollAccel = new MacOSScrollAccel({ maxMultiplier: 8 })
 
@@ -18,6 +109,10 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
   const currentChannelId = useStore((state) => state.currentChannelId)
   const servers = useStore((state) => state.servers)
   const messages = useStore((state) => state.messages)
+  const selectedMessage = useStore((state) => state.selectedMessage)
+  const setSelectedMessage = useStore((state) => state.setSelectedMessage)
+
+  const scrollBoxRef = useRef<ScrollBoxRenderable | null>(null)
 
   const currentServer = servers.find((s) => s.id === currentServerId)
   const currentChannel = currentServer?.channels.find((c) => c.id === currentChannelId)
@@ -34,6 +129,73 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
   const channelHeaderHeight = activeView || isServerView ? 2 : 0
   const topicHeight = currentChannel?.topic ? 2 : 0
   const messagesHeight = height - channelHeaderHeight - topicHeight - 2
+
+  // Keep refs current so the effect doesn't need them in its dep array
+  const allMessagesRef = useRef(allMessages)
+  const messagesHeightRef = useRef(messagesHeight)
+  useEffect(() => {
+    allMessagesRef.current = allMessages
+  }, [allMessages])
+  useEffect(() => {
+    messagesHeightRef.current = messagesHeight
+  }, [messagesHeight])
+
+  // Compute rendered line-height of a single message box
+  const msgLineCount = (msg: Message, isSelected: boolean) => {
+    let h = 1 // first line always
+    if (msg.isMultiline && msg.lines && msg.lines.length > 1) {
+      if (isSelected) {
+        h += msg.lines.length - 1 // all remaining lines visible
+      } else {
+        h += Math.min(msg.lines.length - 1, 1) // at most the 2nd line
+        if (msg.lines.length > 2) h += 1 // chevron row
+      }
+    }
+    if (msg.replyMessage) h += 1
+    if (msg.reactions.length > 0) h += 1
+    if (isSelected) h += 1 // hints row
+    return h
+  }
+
+  useEffect(() => {
+    const box = scrollBoxRef.current
+    if (!box) return
+
+    if (!selectedMessage) {
+      // Exiting selection — snap back to live view (bottom)
+      box.scrollTop = Number.MAX_SAFE_INTEGER
+      return
+    }
+
+    // Defer until after opentui re-renders so the hint row is part of the layout
+    // before we read/write scrollTop
+    const timer = setTimeout(() => {
+      const b = scrollBoxRef.current
+      if (!b) return
+
+      const msgs = allMessagesRef.current
+      const viewportH = messagesHeightRef.current
+      const idx = msgs.findIndex((m) => m.id === selectedMessage.id)
+      if (idx === -1) return
+
+      let startLine = 0
+      for (let i = 0; i < idx; i++) {
+        const m = msgs[i]
+        if (m) startLine += msgLineCount(m, false)
+      }
+      const selHeight = msgLineCount(selectedMessage, true)
+      const endLine = startLine + selHeight
+
+      const current = b.scrollTop
+      if (startLine < current) {
+        b.scrollTop = startLine
+      } else if (endLine > current + viewportH) {
+        b.scrollTop = endLine - viewportH
+      }
+    }, 0)
+
+    return () => clearTimeout(timer)
+  }, [selectedMessage, messagesHeight])
 
   const formatTimestamp = (date: Date) => {
     const hours = String(date.getHours()).padStart(2, '0')
@@ -247,9 +409,10 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
       )}
 
       <scrollbox
+        ref={scrollBoxRef as React.RefObject<ScrollBoxRenderable>}
         height={messagesHeight}
         focused={focused}
-        stickyScroll={true}
+        stickyScroll={!selectedMessage}
         stickyStart="bottom"
         scrollAcceleration={chatScrollAccel}
         style={{
@@ -262,11 +425,46 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
           },
         }}
       >
-        {allMessages.map((msg: Message) => (
-          <box key={msg.id} paddingLeft={1} paddingRight={1}>
-            {renderMessage(msg)}
-          </box>
-        ))}
+        {allMessages.map((msg: Message) => {
+          const isSelected = selectedMessage?.id === msg.id
+          const isSelectable = SELECTABLE_TYPES.includes(msg.type)
+          const { username } = formatMessage(msg)
+          const offset = contentOffset(username)
+          return (
+            <box
+              key={msg.id}
+              paddingLeft={1}
+              paddingRight={1}
+              backgroundColor={isSelected ? THEME.selectedBackground : undefined}
+              onMouseDown={isSelectable ? () => setSelectedMessage(msg) : undefined}
+            >
+              {msg.replyMessage && <ReplyPreview replyMessage={msg.replyMessage} offset={offset} />}
+              {msg.isMultiline && msg.lines ? (
+                <MultilineMessageView
+                  msg={msg}
+                  username={username}
+                  timestamp={formatTimestamp(msg.timestamp)}
+                  offset={offset}
+                  isSelected={isSelected}
+                />
+              ) : (
+                renderMessage(msg)
+              )}
+              {isSelected && (
+                <box paddingLeft={offset}>
+                  <text fg={THEME.mutedText}>
+                    <span fg={THEME.accentBlue}>[e]</span> React{' '}
+                    <span fg={THEME.accentBlue}>[r]</span> Reply{' '}
+                    <span fg={THEME.accentBlue}>[y]</span> Copy
+                  </text>
+                </box>
+              )}
+              {msg.reactions.length > 0 && (
+                <ReactionsRow reactions={msg.reactions} paddingLeft={offset} />
+              )}
+            </box>
+          )
+        })}
       </scrollbox>
     </box>
   )

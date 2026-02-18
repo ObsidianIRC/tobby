@@ -14,6 +14,8 @@ export interface UISlice extends UIState {
   setTerminalDimensions: (width: number, height: number) => void
   setCurrentServer: (serverId: string | null) => void
   setCurrentChannel: (channelId: string | null) => void
+  setQuitWarning: (msg: string | null) => void
+  setInputLineCount: (n: number) => void
 }
 
 export const createUISlice: StateCreator<AppStore, [], [], UISlice> = (set, get) => ({
@@ -24,10 +26,12 @@ export const createUISlice: StateCreator<AppStore, [], [], UISlice> = (set, get)
   showUserPane: true,
   selectedMessage: null,
   replyingTo: null,
+  quitWarning: null,
   terminalWidth: 80,
   terminalHeight: 24,
   currentServerId: null,
   currentChannelId: null,
+  inputLineCount: 1,
 
   openModal: (modalId) => set({ activeModal: modalId }),
   closeModal: () => set({ activeModal: null }),
@@ -37,6 +41,8 @@ export const createUISlice: StateCreator<AppStore, [], [], UISlice> = (set, get)
   toggleUserPane: () => set((state) => ({ showUserPane: !state.showUserPane })),
   setSelectedMessage: (message) => set({ selectedMessage: message }),
   setReplyingTo: (message) => set({ replyingTo: message }),
+  setQuitWarning: (msg) => set({ quitWarning: msg }),
+  setInputLineCount: (n) => set({ inputLineCount: n }),
   setTerminalDimensions: (width, height) => set({ terminalWidth: width, terminalHeight: height }),
   setCurrentServer: (serverId) => set({ currentServerId: serverId }),
   setCurrentChannel: (channelId) => {

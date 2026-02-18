@@ -18,6 +18,7 @@ export function App() {
   const loadPersistedServers = useStore((state) => state.loadPersistedServers)
   const servers = useStore((state) => state.servers)
   const hasAutoConnected = useRef(false)
+  const quitConfirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Initialize IRC and load persisted servers
   useEffect(() => {
@@ -54,8 +55,23 @@ export function App() {
 
   useKeyboard((key) => {
     if (key.name === 'd' && key.ctrl) {
-      renderer.destroy()
-      process.exit(0)
+      // Blocked while in message selection mode — selection owns the keyboard then
+      if (useStore.getState().selectedMessage) return
+
+      if (quitConfirmTimer.current) {
+        clearTimeout(quitConfirmTimer.current)
+        quitConfirmTimer.current = null
+        useStore.getState().setQuitWarning(null)
+        renderer.destroy()
+        process.exit(0)
+        return
+      }
+      // First press — show orange warning in command input area
+      useStore.getState().setQuitWarning(' Press Ctrl+D again within 3 seconds to quit')
+      quitConfirmTimer.current = setTimeout(() => {
+        quitConfirmTimer.current = null
+        useStore.getState().setQuitWarning(null)
+      }, 3000)
       return
     }
 
