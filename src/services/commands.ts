@@ -37,7 +37,7 @@ export class CommandParser {
       execute: async (_, ctx) => {
         const helpLines = [
           '══════════════════════════════════════════════════════════',
-          '           ObbyTTY IRC Client - Help                     ',
+          '             tobby IRC Client - Help                     ',
           '══════════════════════════════════════════════════════════',
           '',
           'INPUT:',
@@ -72,7 +72,12 @@ export class CommandParser {
           '  • Ctrl+K    Quick actions menu',
           '  • Ctrl+L    Toggle member pane',
           '  • Ctrl+O    Toggle multiline expand',
+          '  • Ctrl+M    Toggle multiline always-on',
           '  • Ctrl+D    Quit (press twice to confirm)',
+          '  • Alt+N/P   Next/prev buffer',
+          '  • Alt+1..9  Jump to buffer by number',
+          '  • Alt+[     Move current server/channel up',
+          '  • Alt+]     Move current server/channel down',
           '',
           'MESSAGE SELECTION (Ctrl+Space to toggle):',
           '  • ↑/↓ or J/K  Navigate one message',

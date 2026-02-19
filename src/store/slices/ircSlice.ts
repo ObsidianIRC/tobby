@@ -26,6 +26,15 @@ export interface IRCSlice {
 // Module-level timer storage to avoid storing timers in Zustand state
 const typingTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
+interface PendingReaction {
+  channelId: string
+  emoji: string
+  userId: string
+  isUnreact: boolean
+}
+// Keyed by target message msgid. Cleared when applied or on batch end.
+const pendingHistoryReactions = new Map<string, PendingReaction[]>()
+
 export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, get) => ({
   ircClient: null,
   typingUsers: {},
@@ -253,7 +262,20 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       if ((reactEmoji || unreactEmoji) && targetMsgId && channel) {
         const msgs = messages.get(channel.id) ?? []
         const target = msgs.find((m) => m.msgid === targetMsgId)
-        if (!target) return
+        if (!target) {
+          // If from a chathistory batch, defer until the message arrives
+          if (data.mtags?.batch) {
+            const pending = pendingHistoryReactions.get(targetMsgId) ?? []
+            pending.push({
+              channelId: channel.id,
+              emoji: (reactEmoji ?? unreactEmoji)!,
+              userId: data.sender,
+              isUnreact: !!unreactEmoji,
+            })
+            pendingHistoryReactions.set(targetMsgId, pending)
+          }
+          return
+        }
 
         const emoji = (reactEmoji ?? unreactEmoji)!
         const existing = target.reactions
@@ -309,6 +331,29 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       }
 
       addMessage(channel.id, message)
+
+      if (message.msgid) {
+        const pending = pendingHistoryReactions.get(message.msgid)
+        if (pending?.length) {
+          pendingHistoryReactions.delete(message.msgid)
+          const { updateMessage, messages: currentMsgs } = get()
+          const stored = (currentMsgs.get(channel.id) ?? []).find((m) => m.msgid === message.msgid)
+          if (stored) {
+            let reactions = stored.reactions
+            for (const r of pending) {
+              const emoji = r.emoji
+              if (r.isUnreact) {
+                reactions = reactions.filter(
+                  (ex) => !(ex.emoji === emoji && ex.userId === r.userId)
+                )
+              } else if (!reactions.some((ex) => ex.emoji === emoji && ex.userId === r.userId)) {
+                reactions = [...reactions, { emoji, userId: r.userId }]
+              }
+            }
+            updateMessage(channel.id, stored.id, { reactions })
+          }
+        }
+      }
 
       const isHistorical = !!data.mtags?.batch
       if (!isHistorical) {
@@ -806,6 +851,29 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
           mentioned: [],
         }
         addMessage(channel.id, message)
+      }
+    })
+
+    ircClient.on('BATCH_END', (_data: EventMap['BATCH_END']) => {
+      if (pendingHistoryReactions.size === 0) return
+      const { messages, updateMessage } = get()
+      for (const [targetMsgId, reactions] of pendingHistoryReactions) {
+        for (const r of reactions) {
+          const msgs = messages.get(r.channelId) ?? []
+          const target = msgs.find((m) => m.msgid === targetMsgId)
+          if (!target) continue
+          const emoji = r.emoji
+          let newReactions = target.reactions
+          if (r.isUnreact) {
+            newReactions = newReactions.filter(
+              (ex) => !(ex.emoji === emoji && ex.userId === r.userId)
+            )
+          } else if (!newReactions.some((ex) => ex.emoji === emoji && ex.userId === r.userId)) {
+            newReactions = [...newReactions, { emoji, userId: r.userId }]
+          }
+          updateMessage(r.channelId, target.id, { reactions: newReactions })
+        }
+        pendingHistoryReactions.delete(targetMsgId)
       }
     })
   },
