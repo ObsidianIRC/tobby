@@ -1,12 +1,19 @@
 {
-  "name": "obbytty",
+  "name": "tobby",
   "version": "0.1.0",
-  "description": "Modern IRC client for the terminal",
-  "module": "index.ts",
+  "description": "The Terminal Obby — a modern IRC client for the terminal",
   "type": "module",
-  "private": true,
+  "bin": {
+    "tobby": "bin/tobby.js"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md"
+  ],
   "scripts": {
     "dev": "bun run src/index.tsx",
+    "start": "bun run dist/index.js",
     "build": "bun build src/index.tsx --outdir dist --target bun",
     "test": "vitest",
     "test:coverage": "vitest --coverage",

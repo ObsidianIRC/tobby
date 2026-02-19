@@ -14,7 +14,7 @@ globalThis.__APP_VERSION__ = '0.1.0'
 // Simple debug logging that doesn't interfere with console
 const isDebug = process.argv.includes('--debug')
 if (isDebug) {
-  const logStream = fs.createWriteStream('obbytty-debug.log', { flags: 'a' })
+  const logStream = fs.createWriteStream('tobby-debug.log', { flags: 'a' })
   globalThis.debugLog = (...args: any[]) => {
     const timestamp = new Date().toISOString()
     const message = args

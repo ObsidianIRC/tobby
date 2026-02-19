@@ -55,6 +55,7 @@ class DatabaseService {
         sasl_account TEXT,
         sasl_password TEXT,
         auto_connect INTEGER DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       )
@@ -66,10 +67,23 @@ class DatabaseService {
         server_id TEXT NOT NULL,
         name TEXT NOT NULL,
         auto_join INTEGER DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL,
         FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE
       )
     `)
+
+    // Migrations for existing databases — ignore if column already exists
+    try {
+      this.db.run('ALTER TABLE servers ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0')
+    } catch {
+      // column already present
+    }
+    try {
+      this.db.run('ALTER TABLE channels ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0')
+    } catch {
+      // column already present
+    }
 
     this.db.run(`
       CREATE TABLE IF NOT EXISTS server_state (
@@ -93,15 +107,30 @@ class DatabaseService {
     `)
   }
 
+  private nextServerSortOrder(): number {
+    const row = this.db
+      .query('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM servers')
+      .get() as { next: number } | null
+    return row?.next ?? 0
+  }
+
+  private nextChannelSortOrder(serverId: string): number {
+    const row = this.db
+      .query('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM channels WHERE server_id = ?')
+      .get(serverId) as { next: number } | null
+    return row?.next ?? 0
+  }
+
   // Server methods
   saveServer(server: Server): void {
     const now = Date.now()
+    const sortOrder = this.nextServerSortOrder()
     this.db.run(
       `INSERT OR REPLACE INTO servers (
         id, name, host, port, ssl, nickname, username, realname,
         password, sasl_account, sasl_password, auto_connect,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        sort_order, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         server.id,
         server.name,
@@ -115,6 +144,7 @@ class DatabaseService {
         server.saslUsername || null,
         server.saslPassword || null,
         1, // auto_connect default true
+        sortOrder,
         now,
         now,
       ]
@@ -129,12 +159,14 @@ class DatabaseService {
   }
 
   getAllServers(): PersistedServer[] {
-    return this.db.query('SELECT * FROM servers ORDER BY created_at ASC').all() as PersistedServer[]
+    return this.db
+      .query('SELECT * FROM servers ORDER BY sort_order ASC, created_at ASC')
+      .all() as PersistedServer[]
   }
 
   getAutoConnectServers(): PersistedServer[] {
     return this.db
-      .query('SELECT * FROM servers WHERE auto_connect = 1 ORDER BY created_at ASC')
+      .query('SELECT * FROM servers WHERE auto_connect = 1 ORDER BY sort_order ASC, created_at ASC')
       .all() as PersistedServer[]
   }
 
@@ -165,24 +197,35 @@ class DatabaseService {
   // Channel methods
   saveChannel(channel: Channel, serverId: string): void {
     const now = Date.now()
+    const sortOrder = this.nextChannelSortOrder(serverId)
     this.db.run(
       `INSERT OR REPLACE INTO channels (
-        id, server_id, name, auto_join, created_at
-      ) VALUES (?, ?, ?, ?, ?)`,
-      [channel.id, serverId, channel.name, 1, now] // auto_join default true
+        id, server_id, name, auto_join, sort_order, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?)`,
+      [channel.id, serverId, channel.name, 1, sortOrder, now]
     )
   }
 
   getChannelsForServer(serverId: string): PersistedChannel[] {
     return this.db
-      .query('SELECT * FROM channels WHERE server_id = ? ORDER BY created_at ASC')
+      .query('SELECT * FROM channels WHERE server_id = ? ORDER BY sort_order ASC, created_at ASC')
       .all(serverId) as PersistedChannel[]
   }
 
   getAutoJoinChannels(serverId: string): PersistedChannel[] {
     return this.db
-      .query('SELECT * FROM channels WHERE server_id = ? AND auto_join = 1 ORDER BY created_at ASC')
+      .query(
+        'SELECT * FROM channels WHERE server_id = ? AND auto_join = 1 ORDER BY sort_order ASC, created_at ASC'
+      )
       .all(serverId) as PersistedChannel[]
+  }
+
+  updateServerSortOrder(id: string, sortOrder: number): void {
+    this.db.run('UPDATE servers SET sort_order = ? WHERE id = ?', [sortOrder, id])
+  }
+
+  updateChannelSortOrder(id: string, sortOrder: number): void {
+    this.db.run('UPDATE channels SET sort_order = ? WHERE id = ?', [sortOrder, id])
   }
 
   deleteChannel(id: string): void {

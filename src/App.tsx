@@ -54,6 +54,10 @@ export function App() {
   }, [renderer])
 
   useKeyboard((key) => {
+    debugLog?.(
+      `key: name=${JSON.stringify(key.name)} seq=${JSON.stringify(key.sequence)} ctrl=${key.ctrl} meta=${key.meta} shift=${key.shift} option=${key.option}`
+    )
+
     if (key.name === 'd' && key.ctrl) {
       // Blocked while in message selection mode — selection owns the keyboard then
       if (useStore.getState().selectedMessage) return
@@ -115,6 +119,26 @@ export function App() {
         renderer,
       }
       registry.execute('buffer.prev', context)
+      return
+    }
+
+    // Alt+[ / Alt+] — reorder server or channel up/down
+    // These non-alphanumeric Alt combos don't get meta:true from the parser;
+    // detect them by raw sequence (\x1b[ and \x1b]) instead.
+    const isAltBracketOpen =
+      key.sequence === '\x1b[' || ((key.meta || key.option) && key.name === '[')
+    const isAltBracketClose =
+      key.sequence === '\x1b]' || ((key.meta || key.option) && key.name === ']')
+    if (isAltBracketOpen || isAltBracketClose) {
+      const state = useStore.getState()
+      const { currentServerId, currentChannelId } = state
+      if (!currentServerId) return
+      const direction = isAltBracketOpen ? 'up' : 'down'
+      if (currentChannelId) {
+        state.reorderChannel(currentServerId, currentChannelId, direction)
+      } else {
+        state.reorderServer(currentServerId, direction)
+      }
       return
     }
 

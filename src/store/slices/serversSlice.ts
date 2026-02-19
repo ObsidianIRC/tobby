@@ -16,6 +16,8 @@ export interface ServersSlice {
   updatePrivateChat: (serverId: string, chatId: string, updates: Partial<PrivateChat>) => void
   removePrivateChat: (serverId: string, chatId: string) => void
   loadPersistedServers: () => void
+  reorderServer: (serverId: string, direction: 'up' | 'down') => void
+  reorderChannel: (serverId: string, channelId: string, direction: 'up' | 'down') => void
 }
 
 export const createServersSlice: StateCreator<ServersSlice> = (set, get) => ({
@@ -171,6 +173,51 @@ export const createServersSlice: StateCreator<ServersSlice> = (set, get) => ({
           : s
       ),
     })),
+
+  reorderServer: (serverId, direction) => {
+    const servers = get().servers
+    const idx = servers.findIndex((s) => s.id === serverId)
+    if (idx === -1) return
+    const newIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (newIdx < 0 || newIdx >= servers.length) return
+
+    const reordered = [...servers]
+    const tmp = reordered[idx]!
+    reordered[idx] = reordered[newIdx]!
+    reordered[newIdx] = tmp
+    set({ servers: reordered })
+
+    try {
+      const db = getDatabase()
+      reordered.forEach((s, i) => db.updateServerSortOrder(s.id, i))
+    } catch (error) {
+      debugLog?.('Failed to persist server order:', error)
+    }
+  },
+
+  reorderChannel: (serverId, channelId, direction) => {
+    const server = get().servers.find((s) => s.id === serverId)
+    if (!server) return
+    const idx = server.channels.findIndex((c) => c.id === channelId)
+    if (idx === -1) return
+    const newIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (newIdx < 0 || newIdx >= server.channels.length) return
+
+    const reordered = [...server.channels]
+    const tmp = reordered[idx]!
+    reordered[idx] = reordered[newIdx]!
+    reordered[newIdx] = tmp
+    set((state) => ({
+      servers: state.servers.map((s) => (s.id === serverId ? { ...s, channels: reordered } : s)),
+    }))
+
+    try {
+      const db = getDatabase()
+      reordered.forEach((c, i) => db.updateChannelSortOrder(c.id, i))
+    } catch (error) {
+      debugLog?.('Failed to persist channel order:', error)
+    }
+  },
 
   loadPersistedServers: () => {
     try {
