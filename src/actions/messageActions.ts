@@ -157,9 +157,7 @@ export function registerMessageActions(registry: ActionRegistry<AppStore>) {
       return !!ctx.selectedMessage && !!ctx.currentChannel
     },
 
-    isVisible: (ctx) => {
-      return !!ctx.currentChannel
-    },
+    isVisible: () => false,
 
     execute: async (ctx: ActionContext<AppStore>, content?: string) => {
       const { store, ircClient, currentServer, currentChannel, selectedMessage } = ctx

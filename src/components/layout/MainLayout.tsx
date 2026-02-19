@@ -10,6 +10,8 @@ import { QuickActionsMenu } from '../modals/QuickActionsMenu'
 import { ConnectServerModal } from '../modals/ConnectServerModal'
 import { RemoveServerModal } from '../modals/RemoveServerModal'
 import { EmojiPickerModal } from '../modals/EmojiPickerModal'
+import { SetTopicModal } from '../modals/SetTopicModal'
+import { ChannelBrowserModal } from '../modals/ChannelBrowserModal'
 import { useStore } from '../../store'
 import { useAppContext } from '../../context/AppContext'
 import { THEME } from '../../constants/theme'
@@ -121,6 +123,10 @@ export function MainLayout() {
       {activeModal === 'emojiPicker' && (
         <EmojiPickerModal width={width} height={height} onEmojiSelect={handleEmojiSelect} />
       )}
+
+      {activeModal === 'set-topic' && <SetTopicModal width={width} height={height} />}
+
+      {activeModal === 'channel-browser' && <ChannelBrowserModal width={width} height={height} />}
     </box>
   )
 }

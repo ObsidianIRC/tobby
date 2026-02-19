@@ -132,6 +132,7 @@ export interface UIState {
   quitWarning: string | null
   inputLineCount: number
   expandMultilines: boolean
+  modalError: string | null
 }
 
 export interface Settings {

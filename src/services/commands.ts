@@ -71,6 +71,7 @@ export class CommandParser {
           'SHORTCUTS:',
           '  • Ctrl+K    Quick actions menu',
           '  • Ctrl+L    Toggle member pane',
+          '  • Ctrl+O    Toggle multiline expand',
           '  • Ctrl+D    Quit (press twice to confirm)',
           '',
           'MESSAGE SELECTION (Ctrl+Space to toggle):',

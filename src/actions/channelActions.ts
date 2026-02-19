@@ -63,8 +63,7 @@ export function registerChannelActions(registry: ActionRegistry<AppStore>) {
       }
 
       if (!channelName) {
-        // Open join channel modal
-        store.openModal('join-channel')
+        store.openModal('channel-browser')
         return
       }
 
@@ -155,9 +154,7 @@ export function registerChannelActions(registry: ActionRegistry<AppStore>) {
       return !!ctx.currentChannel && !ctx.currentChannel.isPrivate
     },
 
-    isVisible: (ctx) => {
-      return !!ctx.currentChannel && !ctx.currentChannel.isPrivate
-    },
+    isVisible: () => false,
 
     execute: async (ctx: ActionContext<AppStore>) => {
       const { ircClient, currentServer, currentChannel } = ctx
@@ -165,7 +162,6 @@ export function registerChannelActions(registry: ActionRegistry<AppStore>) {
         throw new Error('No channel selected')
       }
 
-      // Request topic
       ircClient.getTopic(currentServer.id, currentChannel.name)
     },
   })

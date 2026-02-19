@@ -13,9 +13,9 @@ const FIELDS: FormField[] = [
   { key: 'host', label: 'Host', placeholder: 'irc.example.com' },
   { key: 'port', label: 'Port', placeholder: '6697', defaultValue: '6697' },
   { key: 'nickname', label: 'Nickname', placeholder: 'username' },
-  { key: 'password', label: 'Password', placeholder: '(optional)' },
+  { key: 'password', label: 'Password', placeholder: '(optional)', secret: true },
   { key: 'saslUsername', label: 'SASL Username', placeholder: '(optional)' },
-  { key: 'saslPassword', label: 'SASL Password', placeholder: '(optional)' },
+  { key: 'saslPassword', label: 'SASL Password', placeholder: '(optional)', secret: true },
 ]
 
 export function ConnectServerModal({ width, height }: ConnectServerModalProps) {
