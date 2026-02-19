@@ -90,12 +90,13 @@ export class IRCClient extends BaseIRCClient {
 
       const lines = event.data.split('\r\n')
       for (const line of lines) {
-        if (!line.startsWith(':')) continue
+        // Strip IRCv3 message tags (@key=val;... ) so tagged servers (e.g. server-time) work
+        const bare = line.startsWith('@') ? line.slice(line.indexOf(' ') + 1) : line
+        if (!bare.startsWith(':')) continue
 
         // RPL_WELCOME (001) — mark as connected
-        if (line.includes(' 001 ')) {
+        if (bare.includes(' 001 ')) {
           if (!server.isConnected) {
-            debugLog?.(`[IRC] RPL_WELCOME received for ${host} - connected!`)
             server.isConnected = true
             server.connectionState = 'connected'
             ;(this as any).triggerEvent('connectionStateChange', {
@@ -106,21 +107,19 @@ export class IRCClient extends BaseIRCClient {
         }
 
         // 433 — Nickname already in use, retry with _ suffix
-        if (line.includes(' 433 ')) {
+        if (bare.includes(' 433 ')) {
           const currentNick = (this as any).nicks.get(server.id) as string
           const newNick = currentNick + '_'
-          debugLog?.(`[IRC] Nick "${currentNick}" in use, retrying as "${newNick}"`)
           ;(this as any).nicks.set(server.id, newNick)
           nodeSocket.send(`NICK ${newNick}`)
         }
 
-        // Forward "interesting" server messages (numeric replies, server NOTICEs)
-        const parts = line.split(' ')
+        // Forward numeric replies and server NOTICEs as serverMessage events
+        const parts = bare.split(' ')
         const command = parts[1]
         if (command && /^\d{3}$/.test(command)) {
-          // Extract the text after the numeric + target (e.g. ":server 001 nick :Welcome...")
-          const textStart = line.indexOf(':', 1)
-          const text = textStart !== -1 ? line.slice(textStart + 1) : parts.slice(3).join(' ')
+          const textStart = bare.indexOf(':', 1)
+          const text = textStart !== -1 ? bare.slice(textStart + 1) : parts.slice(3).join(' ')
           ;(this as any).triggerEvent('serverMessage', {
             serverId: server.id,
             command,
@@ -128,8 +127,8 @@ export class IRCClient extends BaseIRCClient {
             raw: line,
           })
         } else if (command === 'NOTICE' && !parts[2]?.startsWith('#')) {
-          const textStart = line.indexOf(':', 1)
-          const text = textStart !== -1 ? line.slice(textStart + 1) : ''
+          const textStart = bare.indexOf(':', 1)
+          const text = textStart !== -1 ? bare.slice(textStart + 1) : ''
           ;(this as any).triggerEvent('serverMessage', {
             serverId: server.id,
             command: 'NOTICE',

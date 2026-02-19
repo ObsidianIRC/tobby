@@ -127,6 +127,61 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       }
     )
 
+    // WHOIS responses — route to the currently active buffer so they're visible
+    const addWhoisLine = (serverId: string, text: string) => {
+      const { addMessage } = get()
+      const targetId = get().currentChannelId ?? serverId
+      addMessage(targetId, {
+        id: uuidv4(),
+        type: 'system',
+        content: text,
+        timestamp: new Date(),
+        userId: 'server',
+        channelId: targetId,
+        serverId,
+        reactions: [],
+        replyMessage: null,
+        mentioned: [],
+      })
+    }
+
+    ircClient.on('WHOIS_USER', (data: EventMap['WHOIS_USER']) => {
+      addWhoisLine(
+        data.serverId,
+        `[whois] ${data.nick} (${data.username}@${data.host}) · ${data.realname}`
+      )
+    })
+    ircClient.on('WHOIS_SERVER', (data: EventMap['WHOIS_SERVER']) => {
+      addWhoisLine(data.serverId, `[whois] ${data.nick} via ${data.server} · ${data.serverInfo}`)
+    })
+    ircClient.on('WHOIS_IDLE', (data: EventMap['WHOIS_IDLE']) => {
+      const mins = Math.floor(data.idle / 60)
+      const secs = data.idle % 60
+      const signon = new Date(data.signon * 1000).toLocaleString()
+      addWhoisLine(
+        data.serverId,
+        `[whois] ${data.nick} idle ${mins}m ${secs}s · signed on ${signon}`
+      )
+    })
+    ircClient.on('WHOIS_CHANNELS', (data: EventMap['WHOIS_CHANNELS']) => {
+      addWhoisLine(data.serverId, `[whois] ${data.nick} channels: ${data.channels}`)
+    })
+    ircClient.on('WHOIS_ACCOUNT', (data: EventMap['WHOIS_ACCOUNT']) => {
+      addWhoisLine(data.serverId, `[whois] ${data.nick} logged in as ${data.account}`)
+    })
+    ircClient.on('WHOIS_SECURE', (data: EventMap['WHOIS_SECURE']) => {
+      addWhoisLine(data.serverId, `[whois] ${data.nick}: ${data.message}`)
+    })
+    ircClient.on('WHOIS_SPECIAL', (data: EventMap['WHOIS_SPECIAL']) => {
+      addWhoisLine(data.serverId, `[whois] ${data.nick}: ${data.message}`)
+    })
+    ircClient.on('WHOIS_BOT', (data: EventMap['WHOIS_BOT']) => {
+      addWhoisLine(data.serverId, `[whois] ${data.nick}: ${data.message}`)
+    })
+    ircClient.on('WHOIS_END', (data: EventMap['WHOIS_END']) => {
+      addWhoisLine(data.serverId, `[whois] End of WHOIS for ${data.nick}`)
+    })
+
     // Sync negotiated capabilities to store
     ircClient.on('CAP ACK', (data: EventMap['CAP ACK']) => {
       const { getServer, updateServer } = get()
@@ -144,17 +199,22 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       if (!server) return
 
       const channel = server.channels.find((c) => c.name === data.channelName)
+      // For DMs the TAGMSG target is our own nick — find the private chat by the sender
+      const privateChat = !channel
+        ? server.privateChats.find((pc) => pc.username.toLowerCase() === data.sender.toLowerCase())
+        : undefined
+      const bufferTarget = channel ?? privateChat
 
       const typingValue = data.mtags?.['+typing']
       if (typingValue) {
-        // Ignore our own typing echoes (server relays our own TAGMSG back to us)
+        // Ignore our own typing echoes
         if (server.nickname && data.sender.toLowerCase() === server.nickname.toLowerCase()) return
-        if (!channel) return
+        if (!bufferTarget) return
 
         if (typingValue === 'done') {
-          clearTypingUser(channel.id, data.sender)
+          clearTypingUser(bufferTarget.id, data.sender)
         } else {
-          setTypingUser(channel.id, data.sender)
+          setTypingUser(bufferTarget.id, data.sender)
         }
         return
       }
@@ -471,9 +531,14 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
 
     // Nick change
     ircClient.on('NICK', (data: EventMap['NICK']) => {
-      const { getServer, updateChannel, addMessage } = get()
+      const { getServer, updateServer, updateChannel, addMessage } = get()
       const server = getServer(data.serverId)
       if (!server) return
+
+      // If it's our own nick change, update the stored nickname (affects typing/mention checks)
+      if (data.oldNick.toLowerCase() === server.nickname.toLowerCase()) {
+        updateServer(data.serverId, { nickname: data.newNick })
+      }
 
       // Update username in all channels
       for (const channel of server.channels) {
@@ -602,10 +667,39 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
           ? server.channels.find((c) => c.name === data.channelName)
           : undefined
 
-        if (!channel) return
+        // For DMs: channelName is always undefined (base class only sets it for #channels).
+        // Determine the PM partner: for incoming use sender, for our own echo use currentChannelId.
+        let pmChat: (typeof server.privateChats)[number] | undefined
+        if (!channel) {
+          const isOurs = data.sender.toLowerCase() === server.nickname.toLowerCase()
+          if (isOurs) {
+            // Outgoing echo — we're still viewing the PM we just sent to
+            const currentId = get().currentChannelId
+            pmChat = server.privateChats.find((pc) => pc.id === currentId)
+          } else {
+            // Incoming DM multiline — partner is the sender
+            pmChat = server.privateChats.find(
+              (pc) => pc.username.toLowerCase() === data.sender.toLowerCase()
+            )
+            if (!pmChat) {
+              const { addPrivateChat } = get()
+              pmChat = {
+                id: uuidv4(),
+                username: data.sender,
+                serverId: data.serverId,
+                unreadCount: 0,
+                isMentioned: false,
+              }
+              addPrivateChat(data.serverId, pmChat)
+            }
+          }
+        }
+
+        const buffer = channel ?? pmChat
+        if (!buffer) return
 
         // Multiline message received — sender is no longer typing
-        clearTypingUser(channel.id, data.sender)
+        clearTypingUser(buffer.id, data.sender)
 
         const fullText = data.lines.join('\n')
         const isAction =
@@ -616,7 +710,7 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
 
         const replyMsgId = data.mtags?.['+draft/reply']
         const replyMessage = replyMsgId
-          ? ((get().messages.get(channel.id) ?? []).find((m) => m.msgid === replyMsgId) ?? null)
+          ? ((get().messages.get(buffer.id) ?? []).find((m) => m.msgid === replyMsgId) ?? null)
           : null
 
         const message: Message = {
@@ -629,7 +723,7 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
           content,
           timestamp: data.timestamp,
           userId: data.sender,
-          channelId: channel.id,
+          channelId: buffer.id,
           serverId: data.serverId,
           reactions: [],
           replyMessage,
@@ -637,16 +731,16 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
           tags: data.mtags,
         }
 
-        addMessage(channel.id, message)
+        addMessage(buffer.id, message)
 
         const isHistorical = !!data.mtags?.batch
         if (!isHistorical) {
           const { currentChannelId, updateChannel } = get()
           const mentioned = nickMentioned(fullText, server.nickname)
 
-          if (currentChannelId !== channel.id) {
-            updateChannel(data.serverId, channel.id, {
-              unreadCount: channel.unreadCount + 1,
+          if (currentChannelId !== buffer.id) {
+            updateChannel(data.serverId, buffer.id, {
+              unreadCount: (buffer.unreadCount ?? 0) + 1,
               ...(mentioned && { isMentioned: true }),
             })
           }

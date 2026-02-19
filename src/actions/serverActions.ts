@@ -194,6 +194,39 @@ export function registerServerActions(registry: ActionRegistry<AppStore>) {
     },
   })
 
+  // Disconnect and remove current server, focusing the one above
+  registry.register({
+    id: 'server.disconnectAndRemove',
+    label: 'Disconnect & Remove Server',
+    description: 'Disconnect from the current server and remove it from the list',
+    category: 'server',
+    keywords: ['disconnect', 'remove', 'delete', 'server'],
+    priority: 85,
+
+    isEnabled: (ctx) => !!ctx.currentServer,
+    isVisible: (ctx) => !!ctx.currentServer,
+
+    execute: async (ctx: ActionContext<AppStore>) => {
+      const { store, ircClient, currentServer } = ctx
+      if (!currentServer) return
+
+      const servers = store.servers
+      const idx = servers.findIndex((s) => s.id === currentServer.id)
+
+      if (currentServer.isConnected && ircClient) {
+        ircClient.sendRaw(currentServer.id, 'QUIT :Disconnecting')
+        ircClient.disconnect(currentServer.id)
+      }
+
+      store.removeServer(currentServer.id)
+
+      const remaining = servers.filter((s) => s.id !== currentServer.id)
+      const next = remaining[idx - 1] ?? remaining[0] ?? null
+      store.setCurrentServer(next?.id ?? null)
+      store.setCurrentChannel(null)
+    },
+  })
+
   // Remove server
   registry.register({
     id: 'server.remove',

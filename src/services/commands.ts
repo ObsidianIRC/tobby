@@ -59,11 +59,14 @@ export class CommandParser {
           '  • /join #channel                 Join channel',
           '  • /part [#channel]               Leave channel',
           '  • /msg <nick> <text>             Private message',
+          '  • /query <nick>                  Open PM window with user',
           '  • /nick <newnick>                Change nickname',
           '  • /topic [new topic]             Get/set topic',
           '  • /whois <nick>                  User info',
           '  • /away [message]                Set/clear away',
           '  • /quit [reason]                 Quit',
+          '  • /disconnect                    Disconnect and remove current server',
+          '  • /quote <raw line>              Send raw IRC line to server',
           '',
           'SHORTCUTS:',
           '  • Ctrl+K    Quick actions menu',
@@ -363,6 +366,70 @@ export class CommandParser {
           ctx.currentServer.id,
           `CHATHISTORY LATEST ${ctx.currentChannel.name} * ${count}`
         )
+        return { success: true }
+      },
+    })
+
+    this.register({
+      name: 'quote',
+      aliases: ['raw'],
+      description: 'Send a raw IRC line to the server',
+      usage: '/quote <raw line>',
+      minArgs: 1,
+      execute: async (args, ctx) => {
+        if (!ctx.currentServer || !ctx.ircClient) {
+          return { success: false, message: 'Not connected to a server' }
+        }
+        ctx.ircClient.sendRaw(ctx.currentServer.id, args.join(' '))
+        return { success: true }
+      },
+    })
+
+    this.register({
+      name: 'query',
+      aliases: ['q'],
+      description: 'Open a private message window with a user',
+      usage: '/query <nick>',
+      minArgs: 1,
+      maxArgs: 1,
+      execute: async (args, ctx) => {
+        const nick = args[0]!
+        if (!ctx.currentServer) {
+          return { success: false, message: 'Not connected to a server' }
+        }
+        const { currentServer } = ctx
+        const existing = currentServer.privateChats.find(
+          (pc) => pc.username.toLowerCase() === nick.toLowerCase()
+        )
+        if (existing) {
+          ctx.store.setCurrentChannel(existing.id)
+          return { success: true }
+        }
+        const chat = {
+          id: uuidv4(),
+          username: nick as string,
+          serverId: currentServer.id,
+          unreadCount: 0 as number,
+          isMentioned: false as boolean,
+        }
+        ctx.store.addPrivateChat(currentServer.id, chat)
+        ctx.store.setCurrentChannel(chat.id)
+        return { success: true }
+      },
+    })
+
+    this.register({
+      name: 'disconnect',
+      aliases: [],
+      description: 'Disconnect from and remove the current server',
+      usage: '/disconnect',
+      minArgs: 0,
+      maxArgs: 0,
+      execute: async (_, ctx) => {
+        if (!ctx.currentServer) {
+          return { success: false, message: 'No server selected' }
+        }
+        await this.registry.execute('server.disconnectAndRemove', ctx)
         return { success: true }
       },
     })

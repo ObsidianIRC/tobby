@@ -30,6 +30,9 @@ const COMMANDS = [
   'history',
   'whisper',
   'clear',
+  'disconnect',
+  'query',
+  'quote',
 ]
 
 const SELECTABLE_TYPES: Message['type'][] = ['message', 'action']

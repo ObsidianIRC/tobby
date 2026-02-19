@@ -18,8 +18,11 @@ export function useTypingIndicator({ input, debounceMs = 3000 }: UseTypingIndica
 
     const currentServer = store.servers.find((s) => s.id === store.currentServerId)
     const currentChannel = currentServer?.channels.find((c) => c.id === store.currentChannelId)
+    const currentPrivateChat = currentServer?.privateChats.find(
+      (pc) => pc.id === store.currentChannelId
+    )
 
-    if (!currentServer || !currentChannel) return
+    if (!currentServer || (!currentChannel && !currentPrivateChat)) return
 
     // Only send typing notifications for regular messages, not commands
     const isTyping = input.length > 0 && !input.startsWith('/')

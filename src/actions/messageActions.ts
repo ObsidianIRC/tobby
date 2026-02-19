@@ -337,25 +337,32 @@ export function registerMessageActions(registry: ActionRegistry<AppStore>) {
     isEnabled: (ctx) => {
       // `+typing` is a client-only tag relayed by any server that supports message-tags,
       // even if the server doesn't explicitly advertise draft/typing in its CAP LS.
-      return (
-        !!ctx.currentChannel &&
-        !!(
-          ctx.currentServer?.capabilities?.includes('draft/typing') ||
-          ctx.currentServer?.capabilities?.includes('message-tags')
-        )
-      )
+      const hasTypingCap =
+        ctx.currentServer?.capabilities?.includes('draft/typing') ||
+        ctx.currentServer?.capabilities?.includes('message-tags')
+      const hasTarget =
+        !!ctx.currentChannel ||
+        !!ctx.currentServer?.privateChats.find((pc) => pc.id === ctx.store.currentChannelId)
+      return !!(hasTypingCap && hasTarget)
     },
 
     isVisible: () => false, // Hidden, used programmatically
 
     execute: async (ctx: ActionContext<AppStore>, isActive?: boolean) => {
       const { ircClient, currentServer, currentChannel } = ctx
-      if (!ircClient || !currentServer || !currentChannel) {
+      if (!ircClient || !currentServer) return
+
+      if (currentChannel) {
+        ircClient.sendTyping(currentServer.id, currentChannel.name, isActive ?? true)
         return
       }
 
-      // Send typing indicator
-      ircClient.sendTyping(currentServer.id, currentChannel.name, isActive ?? true)
+      const privateChat = currentServer.privateChats.find(
+        (pc) => pc.id === ctx.store.currentChannelId
+      )
+      if (privateChat) {
+        ircClient.sendTyping(currentServer.id, privateChat.username, isActive ?? true)
+      }
     },
   })
 }
