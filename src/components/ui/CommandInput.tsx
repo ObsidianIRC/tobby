@@ -57,6 +57,7 @@ export function CommandInput({ width }: CommandInputProps) {
 
   const { registry, ircClient, renderer } = useAppContext()
   const activeModal = useStore((state) => state.activeModal)
+  const toggleExpandMultilines = useStore((state) => state.toggleExpandMultilines)
   const currentServerId = useStore((state) => state.currentServerId)
   const currentChannelId = useStore((state) => state.currentChannelId)
   const servers = useStore((state) => state.servers)
@@ -264,6 +265,18 @@ export function CommandInput({ width }: CommandInputProps) {
         return
       }
 
+      if (key.name === 'g') {
+        key.preventDefault()
+        if (key.shift) {
+          const last = selectableMessages[selectableMessages.length - 1]
+          if (last) setSelectedMessage(last)
+        } else {
+          const first = selectableMessages[0]
+          if (first) setSelectedMessage(first)
+        }
+        return
+      }
+
       return
     }
 
@@ -274,6 +287,9 @@ export function CommandInput({ width }: CommandInputProps) {
       const result = handleTabCompletion(getText(), { users, channels, commands: COMMANDS })
       if (result) {
         loadText(result.newText)
+        // setText doesn't fire onContentChange, so manually trigger a React re-render
+        // so opentui flushes the terminal update on this keypress instead of the next one
+        setInputText(result.newText)
         if (textareaRef.current) {
           textareaRef.current.cursorOffset = result.newCursorPosition
         }
@@ -320,6 +336,11 @@ export function CommandInput({ width }: CommandInputProps) {
       resetCompletion()
       return
     }
+
+    if (key.ctrl && key.name === 'o' && !activeModal) {
+      toggleExpandMultilines()
+      return
+    }
   })
 
   useEffect(() => {
@@ -332,18 +353,25 @@ export function CommandInput({ width }: CommandInputProps) {
   const prompt = getPrompt()
   const promptWidth = prompt.length
   const visibleLines = Math.min(inputLineCount, 5)
+  const isFocused = !activeModal && !selectedMessage
 
   return (
     <box
       width={width}
-      height={1 + visibleLines + (errorMessage ? 1 : 0) + (quitWarning ? 1 : 0)}
+      height={visibleLines + 2 + (errorMessage ? 1 : 0) + (quitWarning ? 1 : 0)}
       flexDirection="column"
+      backgroundColor={THEME.backgroundInput}
+      paddingLeft={2}
+      paddingRight={2}
     >
       <box
-        height={visibleLines}
-        paddingLeft={1}
-        backgroundColor={THEME.backgroundInput}
+        height={visibleLines + 2}
+        border
+        borderStyle="single"
+        borderColor={isFocused ? THEME.borderFocus : THEME.border}
+        backgroundColor={THEME.backgroundElement}
         flexDirection="row"
+        paddingLeft={1}
       >
         <box width={promptWidth} flexShrink={0} height={1}>
           <text>
@@ -353,9 +381,9 @@ export function CommandInput({ width }: CommandInputProps) {
         <textarea
           ref={textareaRef as React.RefObject<TextareaRenderable>}
           height={visibleLines}
-          focused={!activeModal && !selectedMessage}
-          backgroundColor={THEME.backgroundInput}
-          focusedBackgroundColor={THEME.backgroundInput}
+          focused={isFocused}
+          backgroundColor={THEME.backgroundElement}
+          focusedBackgroundColor={THEME.backgroundElement}
           placeholder="Type a message or /command..."
           flexGrow={1}
           onContentChange={() => {

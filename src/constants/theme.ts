@@ -4,7 +4,7 @@ export const THEME = {
   background: '#0d1117', // Deep blue-black
   backgroundPanel: '#161b22', // Slightly lighter panel
   backgroundElement: '#1c2128', // Elevated elements
-  backgroundInput: '#0d1117', // Input area
+  backgroundInput: '#161b22', // Input area
 
   // Rich accent backgrounds
   backgroundServer: '#1a1f26', // Server pane

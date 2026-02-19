@@ -131,6 +131,7 @@ export interface UIState {
   currentChannelId: string | null
   quitWarning: string | null
   inputLineCount: number
+  expandMultilines: boolean
 }
 
 export interface Settings {

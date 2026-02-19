@@ -16,6 +16,7 @@ export interface UISlice extends UIState {
   setCurrentChannel: (channelId: string | null) => void
   setQuitWarning: (msg: string | null) => void
   setInputLineCount: (n: number) => void
+  toggleExpandMultilines: () => void
 }
 
 export const createUISlice: StateCreator<AppStore, [], [], UISlice> = (set, get) => ({
@@ -32,6 +33,7 @@ export const createUISlice: StateCreator<AppStore, [], [], UISlice> = (set, get)
   currentServerId: null,
   currentChannelId: null,
   inputLineCount: 1,
+  expandMultilines: false,
 
   openModal: (modalId) => set({ activeModal: modalId }),
   closeModal: () => set({ activeModal: null }),
@@ -43,6 +45,7 @@ export const createUISlice: StateCreator<AppStore, [], [], UISlice> = (set, get)
   setReplyingTo: (message) => set({ replyingTo: message }),
   setQuitWarning: (msg) => set({ quitWarning: msg }),
   setInputLineCount: (n) => set({ inputLineCount: n }),
+  toggleExpandMultilines: () => set((state) => ({ expandMultilines: !state.expandMultilines })),
   setTerminalDimensions: (width, height) => set({ terminalWidth: width, terminalHeight: height }),
   setCurrentServer: (serverId) => set({ currentServerId: serverId }),
   setCurrentChannel: (channelId) => {

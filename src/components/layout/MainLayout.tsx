@@ -38,7 +38,7 @@ export function MainLayout() {
   const memberPaneWidth = showUserPane ? 20 : 0
   const chatPaneWidth = innerWidth - serverPaneWidth - memberPaneWidth
 
-  const commandInputHeight = 1 + Math.min(inputLineCount, 5) + (quitWarning ? 1 : 0)
+  const commandInputHeight = 2 + Math.min(inputLineCount, 5) + (quitWarning ? 1 : 0)
   const typingIndicatorHeight = 1
   const statusBarHeight = 1
   const replyBarHeight = replyingTo ? 2 : 0

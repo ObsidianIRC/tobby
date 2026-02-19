@@ -111,6 +111,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
   const messages = useStore((state) => state.messages)
   const selectedMessage = useStore((state) => state.selectedMessage)
   const setSelectedMessage = useStore((state) => state.setSelectedMessage)
+  const expandMultilines = useStore((state) => state.expandMultilines)
 
   const scrollBoxRef = useRef<ScrollBoxRenderable | null>(null)
 
@@ -144,7 +145,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
   const msgLineCount = (msg: Message, isSelected: boolean) => {
     let h = 1 // first line always
     if (msg.isMultiline && msg.lines && msg.lines.length > 1) {
-      if (isSelected) {
+      if (isSelected || expandMultilines) {
         h += msg.lines.length - 1 // all remaining lines visible
       } else {
         h += Math.min(msg.lines.length - 1, 1) // at most the 2nd line
@@ -445,7 +446,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
                   username={username}
                   timestamp={formatTimestamp(msg.timestamp)}
                   offset={offset}
-                  isSelected={isSelected}
+                  isSelected={isSelected || expandMultilines}
                 />
               ) : (
                 renderMessage(msg)
