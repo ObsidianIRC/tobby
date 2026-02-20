@@ -8,6 +8,7 @@ import { useTypingIndicator } from '../../hooks/useTypingIndicator'
 import { useTabCompletion } from '../../hooks/useTabCompletion'
 import { copyToClipboard } from '../../utils/clipboard'
 import { stripIrcFormatting } from '../../utils/ircFormatting'
+import { registerInputRef } from '../../utils/inputFocus'
 import { THEME, COLORS } from '../../constants/theme'
 import type { Message } from '../../types'
 
@@ -74,6 +75,11 @@ export function CommandInput({ width }: CommandInputProps) {
   const currentPrivateChat = currentServer?.privateChats.find((pc) => pc.id === currentChannelId)
 
   const commandParser = useMemo(() => new CommandParser(registry), [registry])
+
+  useEffect(() => {
+    registerInputRef(textareaRef.current)
+    return () => registerInputRef(null)
+  }, [])
 
   useTypingIndicator({ input: inputText })
 
@@ -277,6 +283,17 @@ export function CommandInput({ width }: CommandInputProps) {
         return
       }
 
+      if (key.name === 'return' && selectedMessage.replyMessage) {
+        key.preventDefault()
+        const replyTarget = selectedMessage.replyMessage
+        const channelMsgs = currentChannelId ? (messages.get(currentChannelId) ?? []) : []
+        const target =
+          channelMsgs.find((m) => m.id === replyTarget.id) ??
+          channelMsgs.find((m) => m.msgid && m.msgid === replyTarget.msgid)
+        if (target) setSelectedMessage(target)
+        return
+      }
+
       return
     }
 
@@ -372,6 +389,7 @@ export function CommandInput({ width }: CommandInputProps) {
         backgroundColor={THEME.backgroundElement}
         flexDirection="row"
         paddingLeft={1}
+        onMouseDown={selectedMessage ? () => setSelectedMessage(null) : undefined}
       >
         <box width={promptWidth} flexShrink={0} height={1}>
           <text>

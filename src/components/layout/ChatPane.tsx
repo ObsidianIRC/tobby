@@ -6,6 +6,8 @@ import { useStore } from '../../store'
 import { THEME, COLORS } from '../../constants/theme'
 import { renderIrcText, stripIrcFormatting } from '../../utils/ircFormatting'
 import { getNicknameColor } from '../../utils/nickColors'
+import { copyToClipboard } from '../../utils/clipboard'
+import { focusInput } from '../../utils/inputFocus'
 import type { Message } from '../../types'
 
 const SELECTABLE_TYPES: Message['type'][] = ['message', 'action']
@@ -111,6 +113,8 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
   const messages = useStore((state) => state.messages)
   const selectedMessage = useStore((state) => state.selectedMessage)
   const setSelectedMessage = useStore((state) => state.setSelectedMessage)
+  const setReplyingTo = useStore((state) => state.setReplyingTo)
+  const openModal = useStore((state) => state.openModal)
   const expandMultilines = useStore((state) => state.expandMultilines)
 
   const scrollBoxRef = useRef<ScrollBoxRenderable | null>(null)
@@ -134,6 +138,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
   // Keep refs current so the effect doesn't need them in its dep array
   const allMessagesRef = useRef(allMessages)
   const messagesHeightRef = useRef(messagesHeight)
+  const prevSelectedIdxRef = useRef<number>(-1)
   useEffect(() => {
     allMessagesRef.current = allMessages
   }, [allMessages])
@@ -164,45 +169,66 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
 
     if (!selectedMessage) {
       // Exiting selection — snap back to live view (bottom)
+      prevSelectedIdxRef.current = -1
       box.scrollTop = Number.MAX_SAFE_INTEGER
       return
     }
 
+    // Determine navigation direction before the async timers fire
+    const msgs = allMessagesRef.current
+    const newIdx = msgs.findIndex((m) => m.id === selectedMessage.id)
+    const prevIdx = prevSelectedIdxRef.current
+    prevSelectedIdxRef.current = newIdx
+
+    const isEntering = prevIdx === -1
+    const goingDown = !isEntering && newIdx > prevIdx
+
     // Defer until after opentui re-renders so the hint row is part of the layout
-    // before we read/write scrollTop
     const applyScroll = () => {
       const b = scrollBoxRef.current
       if (!b) return
 
-      const msgs = allMessagesRef.current
+      const currentMsgs = allMessagesRef.current
       const viewportH = messagesHeightRef.current
-      const idx = msgs.findIndex((m) => m.id === selectedMessage.id)
+      const idx = currentMsgs.findIndex((m) => m.id === selectedMessage.id)
       if (idx === -1) return
 
       let startLine = 0
       for (let i = 0; i < idx; i++) {
-        const m = msgs[i]
+        const m = currentMsgs[i]
         if (m) startLine += msgLineCount(m, false)
       }
       const selHeight = msgLineCount(selectedMessage, true)
       const endLine = startLine + selHeight
-
       const current = b.scrollTop
-      if (startLine < current) {
-        b.scrollTop = startLine
-      } else if (endLine > current + viewportH) {
-        b.scrollTop = endLine - viewportH
+
+      // Lines of breathing room kept below the selection when navigating down.
+      // Accounts for text-wrap discrepancies and makes scrolling feel eager.
+      const SCROLL_MARGIN = 3
+
+      if (isEntering) {
+        // Entering selection: only scroll if out of view
+        if (startLine < current) {
+          b.scrollTop = startLine
+        } else if (endLine > current + viewportH) {
+          b.scrollTop = endLine - viewportH
+        }
+      } else if (goingDown) {
+        // Keep selection SCROLL_MARGIN lines away from the viewport bottom.
+        // This triggers earlier than waiting for the edge, so the selection
+        // never slips off-screen even when line heights are slightly off.
+        const desired = endLine - viewportH + SCROLL_MARGIN
+        if (desired > current) b.scrollTop = desired
+      } else {
+        // Going UP: keep top of selection at viewport top edge
+        if (startLine < current) b.scrollTop = startLine
       }
     }
 
     const timer = setTimeout(applyScroll, 0)
-    // Workaround: opentui's layout of the hint row may not be complete at 0ms.
-    // A second pass after 50ms ensures the hint row is visible.
-    const retryTimer = setTimeout(applyScroll, 50)
 
     return () => {
       clearTimeout(timer)
-      clearTimeout(retryTimer)
     }
   }, [selectedMessage, messagesHeight])
 
@@ -460,12 +486,62 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
                 renderMessage(msg)
               )}
               {isSelected && (
-                <box paddingLeft={offset}>
-                  <text fg={THEME.mutedText}>
-                    <span fg={THEME.accentBlue}>[e]</span> React{' '}
-                    <span fg={THEME.accentBlue}>[r]</span> Reply{' '}
-                    <span fg={THEME.accentBlue}>[y]</span> Copy
-                  </text>
+                <box paddingLeft={offset} flexDirection="row">
+                  <box onMouseDown={() => openModal('emojiPicker')}>
+                    <text>
+                      <span fg={THEME.accentBlue}>[e]</span>
+                      <span fg={THEME.mutedText}> React </span>
+                    </text>
+                  </box>
+                  <box
+                    onMouseDown={() => {
+                      setReplyingTo(msg)
+                      setSelectedMessage(null)
+                      focusInput()
+                    }}
+                  >
+                    <text>
+                      <span fg={THEME.accentBlue}>[r]</span>
+                      <span fg={THEME.mutedText}> Reply </span>
+                    </text>
+                  </box>
+                  <box
+                    onMouseDown={() => {
+                      copyToClipboard(stripIrcFormatting(msg.content))
+                      setSelectedMessage(null)
+                    }}
+                  >
+                    <text>
+                      <span fg={THEME.accentBlue}>[y]</span>
+                      <span fg={THEME.mutedText}> Copy</span>
+                    </text>
+                  </box>
+                  {/* Always rendered to avoid opentui flex hit-box issues with conditional children */}
+                  <box
+                    paddingLeft={msg.replyMessage ? 2 : 0}
+                    onMouseDown={
+                      msg.replyMessage
+                        ? () => {
+                            const channelMsgs = currentChannelId
+                              ? (messages.get(currentChannelId) ?? [])
+                              : []
+                            const target =
+                              channelMsgs.find((m) => m.id === msg.replyMessage!.id) ??
+                              channelMsgs.find(
+                                (m) => m.msgid && m.msgid === msg.replyMessage!.msgid
+                              )
+                            if (target) setSelectedMessage(target)
+                          }
+                        : undefined
+                    }
+                  >
+                    {msg.replyMessage && (
+                      <text>
+                        <span fg={THEME.accentBlue}>[↵]</span>
+                        <span fg={THEME.mutedText}> Jump</span>
+                      </text>
+                    )}
+                  </box>
                 </box>
               )}
               {msg.reactions.length > 0 && (
@@ -474,6 +550,8 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
             </box>
           )
         })}
+        {/* Spacer so the last message's hint row always has room to scroll into view */}
+        <box height={1} />
       </scrollbox>
     </box>
   )

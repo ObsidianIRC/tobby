@@ -20,18 +20,19 @@ const msgLineCount = (msg: Message, isSelected: boolean, expandMultilines = fals
 
 /**
  * Pure version of the scroll adjustment logic in ChatPane's useEffect.
- * Returns the new scrollTop, or null if no adjustment is needed.
  *
- * Rules:
- *   - If the message starts above the visible viewport → scroll up to show its top
- *   - If the message (including hint row when selected) ends below the viewport → scroll down
- *   - Otherwise → no change (return null)
+ * isEntering=true  → only scroll if the selected message is outside the viewport (entering selection / retry pass)
+ * goingDown=true   → keep bottom of selection at viewport bottom edge
+ * goingDown=false  → keep top of selection at viewport top edge (going UP)
+ *
+ * Returns the new scrollTop, or null if no adjustment is needed.
  */
 function computeScrollAdjustment(
   messages: Message[],
   selected: Message,
   viewportH: number,
-  currentScrollTop: number
+  currentScrollTop: number,
+  { isEntering = true, goingDown = false }: { isEntering?: boolean; goingDown?: boolean } = {}
 ): number | null {
   const idx = messages.findIndex((m) => m.id === selected.id)
   if (idx === -1) return null
@@ -44,13 +45,20 @@ function computeScrollAdjustment(
   const selHeight = msgLineCount(selected, true)
   const endLine = startLine + selHeight
 
-  if (startLine < currentScrollTop) {
-    return startLine
+  if (isEntering) {
+    if (startLine < currentScrollTop) return startLine
+    if (endLine > currentScrollTop + viewportH) return endLine - viewportH
+    return null
   }
-  if (endLine > currentScrollTop + viewportH) {
-    return endLine - viewportH
+
+  if (goingDown) {
+    const SCROLL_MARGIN = 3
+    const desired = endLine - viewportH + SCROLL_MARGIN
+    return desired > currentScrollTop ? desired : null
   }
-  return null
+
+  // going up
+  return startLine < currentScrollTop ? startLine : null
 }
 
 const makeMsg = (id: string, overrides: Partial<Message> = {}): Message => ({
@@ -101,44 +109,73 @@ describe('chatPane scroll — entering selection mode (Ctrl+Space)', () => {
   })
 })
 
-describe('chatPane scroll — keyboard navigation (j/k)', () => {
+describe('chatPane scroll — keyboard navigation UP (k)', () => {
   it('navigating UP past the viewport top scrolls to show the message', () => {
-    // 50 messages, viewportH=10, currently showing 20-29 (current=20)
     const msgs = makeMessages(50)
-    const target = msgs[15]! // above viewport
-    const result = computeScrollAdjustment(msgs, target, 10, 20)
+    const target = msgs[15]! // above viewport showing 20-29
+    const result = computeScrollAdjustment(msgs, target, 10, 20, {
+      isEntering: false,
+      goingDown: false,
+    })
     // startLine=15, 15 < 20 → scroll to 15
     expect(result).toBe(15)
   })
 
-  it('navigating DOWN past the viewport bottom scrolls to show hint row', () => {
-    // 50 messages, viewportH=10, current=20 (showing 20-29)
+  it('navigating UP: no scroll when already visible at top', () => {
     const msgs = makeMessages(50)
-    const target = msgs[30]! // hint row at 32, below viewport end 30
-    const result = computeScrollAdjustment(msgs, target, 10, 20)
-    // startLine=30, endLine=32. 32 > 20+10=30? No. 30 < 20? No.
-    // Message at line 30 is right at the edge: viewport shows 20-29, msg at 30 is outside
-    // But endLine=32 > 30? Yes. Wait: 32 > 20+10=30 → YES → scroll to 32-10=22
-    expect(result).toBe(22)
+    const target = msgs[21]! // inside viewport showing 20-29
+    const result = computeScrollAdjustment(msgs, target, 10, 20, {
+      isEntering: false,
+      goingDown: false,
+    })
+    // startLine=21, 21 < 20? No → null
+    expect(result).toBeNull()
   })
+})
 
-  it('no scroll when navigating within visible area', () => {
-    // 50 messages, viewportH=10, current=20 (showing 20-29)
+describe('chatPane scroll — keyboard navigation DOWN (j)', () => {
+  it('navigating DOWN within viewport: no scroll when selection is well within safe area', () => {
+    // 50 messages, viewportH=10, current=20 (showing 20-29), MARGIN=3
     const msgs = makeMessages(50)
-    const target = msgs[23]! // well inside viewport
-    const result = computeScrollAdjustment(msgs, target, 10, 20)
-    // startLine=23, endLine=25. 23 < 20? No. 25 > 30? No. → null
+    const target = msgs[23]! // startLine=23, endLine=25. desired=25-10+3=18. 18 > 20? No → null
+    const result = computeScrollAdjustment(msgs, target, 10, 20, {
+      isEntering: false,
+      goingDown: true,
+    })
     expect(result).toBeNull()
   })
 
-  it('message at exactly the bottom edge: hint row below → scroll by 1', () => {
-    // 50 messages, viewportH=10, current=20 (showing 20-29)
-    // Select message at line 29 → hint at 31
+  it('navigating DOWN: scrolls eagerly when selection enters safe-area margin', () => {
+    // current=20, viewportH=10, MARGIN=3. msg[25]: endLine=27, desired=27-10+3=20. 20>20? No.
+    // msg[26]: endLine=28, desired=28-10+3=21. 21>20 → scroll to 21.
+    const msgs = makeMessages(50)
+    const target = msgs[26]! // startLine=26, endLine=28. desired=28-10+3=21. 21 > 20 → scroll
+    const result = computeScrollAdjustment(msgs, target, 10, 20, {
+      isEntering: false,
+      goingDown: true,
+    })
+    expect(result).toBe(21)
+  })
+
+  it('navigating DOWN past viewport bottom scrolls to keep selection within safe area', () => {
+    const msgs = makeMessages(50)
+    const target = msgs[30]! // startLine=30, endLine=32. desired=32-10+3=25. 25 > 20 → scroll
+    const result = computeScrollAdjustment(msgs, target, 10, 20, {
+      isEntering: false,
+      goingDown: true,
+    })
+    expect(result).toBe(25)
+  })
+
+  it('navigating DOWN: scrolls forward when message bottom near viewport bottom', () => {
+    // current=20, viewportH=10. msg[29] endLine=31. desired=31-10+3=24. 24 > 20 → scroll to 24
     const msgs = makeMessages(50)
     const target = msgs[29]!
-    const result = computeScrollAdjustment(msgs, target, 10, 20)
-    // startLine=29, endLine=31. 31 > 20+10=30? YES → scroll to 31-10=21
-    expect(result).toBe(21)
+    const result = computeScrollAdjustment(msgs, target, 10, 20, {
+      isEntering: false,
+      goingDown: true,
+    })
+    expect(result).toBe(24)
   })
 })
 
