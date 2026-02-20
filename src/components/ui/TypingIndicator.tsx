@@ -21,7 +21,7 @@ export function TypingIndicator({ width }: TypingIndicatorProps) {
   }
 
   return (
-    <box width={width} height={1} paddingLeft={1}>
+    <box width={width} height={1} paddingLeft={1} backgroundColor={THEME.backgroundInput}>
       {text && (
         <text>
           <span fg={THEME.mutedText}>{text}</span>

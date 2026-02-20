@@ -23,7 +23,7 @@ export function ReplyBar({ width }: ReplyBarProps) {
   const truncated = content.length > 60 ? content.slice(0, 60) + '...' : content
 
   return (
-    <box width={width} height={2} flexDirection="column" backgroundColor={THEME.backgroundElement}>
+    <box width={width} height={2} flexDirection="column" backgroundColor={THEME.selectedBackground}>
       <box height={1} paddingLeft={2}>
         <text fg={THEME.mutedText}>
           <span fg={THEME.accentBlue}>↩</span> <span fg={THEME.mutedText}>Replying to </span>

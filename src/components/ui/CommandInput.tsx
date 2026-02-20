@@ -54,7 +54,10 @@ export function CommandInput({ width }: CommandInputProps) {
     setInputText('')
     useStore.getState().setInputLineCount(1)
   }
-  const loadText = (t: string) => textareaRef.current?.setText(t)
+  const loadText = (t: string) => {
+    textareaRef.current?.setText(t)
+    if (textareaRef.current) textareaRef.current.cursorOffset = t.length
+  }
 
   const { registry, ircClient, renderer } = useAppContext()
   const activeModal = useStore((state) => state.activeModal)
