@@ -129,7 +129,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
 
   const channelHeaderHeight = activeView || isServerView ? 2 : 0
   const topicHeight = currentChannel?.topic ? 2 : 0
-  const messagesHeight = height - channelHeaderHeight - topicHeight - 2
+  const messagesHeight = height - channelHeaderHeight - topicHeight
 
   // Keep refs current so the effect doesn't need them in its dep array
   const allMessagesRef = useRef(allMessages)
@@ -170,7 +170,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
 
     // Defer until after opentui re-renders so the hint row is part of the layout
     // before we read/write scrollTop
-    const timer = setTimeout(() => {
+    const applyScroll = () => {
       const b = scrollBoxRef.current
       if (!b) return
 
@@ -193,9 +193,17 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
       } else if (endLine > current + viewportH) {
         b.scrollTop = endLine - viewportH
       }
-    }, 0)
+    }
 
-    return () => clearTimeout(timer)
+    const timer = setTimeout(applyScroll, 0)
+    // Workaround: opentui's layout of the hint row may not be complete at 0ms.
+    // A second pass after 50ms ensures the hint row is visible.
+    const retryTimer = setTimeout(applyScroll, 50)
+
+    return () => {
+      clearTimeout(timer)
+      clearTimeout(retryTimer)
+    }
   }, [selectedMessage, messagesHeight])
 
   const formatTimestamp = (date: Date) => {
