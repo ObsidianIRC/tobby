@@ -63,6 +63,7 @@ export class CommandParser {
           '  • /nick <newnick>                Change nickname',
           '  • /topic [new topic]             Get/set topic',
           '  • /whois <nick>                  User info',
+          '  • /names                         List users in channel',
           '  • /away [message]                Set/clear away',
           '  • /quit [reason]                 Quit',
           '  • /disconnect                    Disconnect and remove current server',
@@ -310,6 +311,51 @@ export class CommandParser {
         }
         ctx.ircClient.whois(ctx.currentServer.id, nick)
         return { success: true, message: `Requesting whois for ${nick}...` }
+      },
+    })
+
+    this.register({
+      name: 'names',
+      aliases: [],
+      description: 'List users in the current channel',
+      usage: '/names',
+      minArgs: 0,
+      maxArgs: 0,
+      execute: async (_, ctx) => {
+        if (!ctx.currentChannel) {
+          return { success: false, message: 'No channel selected' }
+        }
+        const { users } = ctx.currentChannel
+        if (users.length === 0) {
+          ctx.store.addMessage(ctx.currentChannel.id, {
+            id: uuidv4(),
+            type: 'system',
+            content: `Users in ${ctx.currentChannel.name}: (none)`,
+            timestamp: new Date(),
+            userId: 'server',
+            username: 'server',
+            reactions: [],
+            replyMessage: null,
+            mentioned: [],
+          })
+          return { success: true }
+        }
+        const formatted = users
+          .map((u) => (u.status ? `${u.status}${u.username}` : u.username))
+          .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+          .join('  ')
+        ctx.store.addMessage(ctx.currentChannel.id, {
+          id: uuidv4(),
+          type: 'system',
+          content: `Users in ${ctx.currentChannel.name} [${users.length}]: ${formatted}`,
+          timestamp: new Date(),
+          userId: 'server',
+          username: 'server',
+          reactions: [],
+          replyMessage: null,
+          mentioned: [],
+        })
+        return { success: true }
       },
     })
 

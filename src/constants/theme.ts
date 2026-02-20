@@ -15,8 +15,8 @@ export const THEME = {
 
   // Text colors
   foreground: '#e6edf3', // Bright white text
-  mutedText: '#7d8590', // Muted gray
-  dimText: '#484f58', // Very dim
+  mutedText: '#8b949e', // Muted gray
+  dimText: '#6e7681', // Very dim
 
   // Borders - clearly visible with color
   border: '#30363d', // Subtle gray border

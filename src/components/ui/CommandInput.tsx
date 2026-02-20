@@ -27,6 +27,7 @@ const COMMANDS = [
   'nick',
   'quit',
   'whois',
+  'names',
   'away',
   'history',
   'whisper',

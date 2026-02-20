@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useTerminalDimensions } from '@opentui/react'
 import { ServerPane } from './ServerPane'
 import { ChatPane } from './ChatPane'
@@ -35,17 +36,37 @@ export function MainLayout() {
 
   const currentServer = servers.find((s) => s.id === currentServerId)
 
-  const innerWidth = width - 2
-  const serverPaneWidth = 25
-  const memberPaneWidth = showUserPane ? 20 : 0
-  const chatPaneWidth = innerWidth - serverPaneWidth - memberPaneWidth
-
-  const commandInputHeight = 2 + Math.min(inputLineCount, 5) + (quitWarning ? 1 : 0)
-  const typingIndicatorHeight = 1
-  const statusBarHeight = 1
-  const replyBarHeight = replyingTo ? 2 : 0
-  const contentHeight =
-    height - 2 - commandInputHeight - typingIndicatorHeight - replyBarHeight - statusBarHeight
+  const {
+    innerWidth,
+    serverPaneWidth,
+    memberPaneWidth,
+    chatPaneWidth,
+    contentHeight,
+    statusBarHeight,
+    effectiveShowUserPane,
+  } = useMemo(() => {
+    const innerWidth = width - 2
+    const autoHideMembers = width < 120
+    const effectiveShowUserPane = showUserPane && !autoHideMembers
+    const serverPaneWidth = width < 100 ? 18 : 25
+    const memberPaneWidth = effectiveShowUserPane ? 20 : 0
+    const chatPaneWidth = innerWidth - serverPaneWidth - memberPaneWidth
+    const commandInputHeight = 2 + Math.min(inputLineCount, 5) + (quitWarning ? 1 : 0)
+    const typingIndicatorHeight = 1
+    const statusBarHeight = 1
+    const replyBarHeight = replyingTo ? 2 : 0
+    const contentHeight =
+      height - 2 - commandInputHeight - typingIndicatorHeight - replyBarHeight - statusBarHeight
+    return {
+      innerWidth,
+      serverPaneWidth,
+      memberPaneWidth,
+      chatPaneWidth,
+      contentHeight,
+      statusBarHeight,
+      effectiveShowUserPane,
+    }
+  }, [width, height, showUserPane, inputLineCount, quitWarning, replyingTo])
 
   const handleEmojiSelect = (emoji: string) => {
     if (!selectedMessage || !currentServer || !currentChannelId || !ircClient) {
@@ -96,7 +117,7 @@ export function MainLayout() {
 
           <ChatPane width={chatPaneWidth} height={contentHeight} focused={focusedPane === 'chat'} />
 
-          {showUserPane && (
+          {effectiveShowUserPane && (
             <MemberPane
               width={memberPaneWidth}
               height={contentHeight}

@@ -528,7 +528,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
         scrollAcceleration={chatScrollAccel}
         style={{
           scrollbarOptions: {
-            showArrows: true,
+            showArrows: false,
             trackOptions: {
               foregroundColor: THEME.accentBlue,
               backgroundColor: THEME.borderSubtle,
