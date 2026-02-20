@@ -1,3 +1,9 @@
 [submodule "ObsidianIRC"]
 	path = ObsidianIRC
 	url = https://github.com/ObsidianIRC/ObsidianIRC.git
+[submodule "aur/tobby"]
+	path = aur/tobby
+	url = ssh://aur@aur.archlinux.org/tobby.git
+[submodule "aur/tobby-bin"]
+	path = aur/tobby-bin
+	url = ssh://aur@aur.archlinux.org/tobby-bin.git
