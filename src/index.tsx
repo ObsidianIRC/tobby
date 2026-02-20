@@ -10,6 +10,12 @@ import { bootstrapServer } from './utils/bootstrapServer'
 declare global {
   var __APP_VERSION__: string
   var debugLog: ((...args: any[]) => void) | undefined
+  // Set when --setup flag is given; tells App to open the connect modal on launch.
+  var __SETUP_MODE__: boolean
+  // CLI-provided prefill values forwarded to the connect modal.
+  var __CLI_PREFILL__:
+    | { host?: string; port?: number; nick?: string; ssl?: boolean; channels?: string[] }
+    | undefined
 }
 
 globalThis.__APP_VERSION__ = '0.1.0'
@@ -39,6 +45,14 @@ Options:
   --ssl              Connect with SSL/TLS.
   --channel <name>   Channel to auto-join, e.g. '#linux'. Repeatable.
 
+  --setup            Open the server setup dialog on launch (prefilled with
+                     --server/--port/--nick if provided). Connects only after
+                     you submit the form, so you can fill in a password etc.
+  --setup-if-not-configured
+                     Like --setup, but skips the dialog if the server
+                     (matched by host+port, or any server when --server is
+                     omitted) is already saved in the database.
+
   --debug            Write a debug log to tobby-debug.log.
   --help, -h         Show this help and exit.
 
@@ -62,10 +76,18 @@ interface ParsedArgs {
   ssl: boolean
   channels: string[]
   debug: boolean
+  setup: boolean
+  setupIfNotConfigured: boolean
 }
 
 function parseArgs(args: string[]): ParsedArgs {
-  const result: ParsedArgs = { ssl: false, channels: [], debug: false }
+  const result: ParsedArgs = {
+    ssl: false,
+    channels: [],
+    debug: false,
+    setup: false,
+    setupIfNotConfigured: false,
+  }
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
       case '--db':
@@ -88,6 +110,12 @@ function parseArgs(args: string[]): ParsedArgs {
         break
       case '--debug':
         result.debug = true
+        break
+      case '--setup':
+        result.setup = true
+        break
+      case '--setup-if-not-configured':
+        result.setupIfNotConfigured = true
         break
     }
   }
@@ -118,9 +146,38 @@ if (parsed.db) {
   setDatabasePath(resolveDatabasePath(parsed.db))
 }
 
+// ── Setup mode globals ────────────────────────────────────────────────────────
+
+let wantsSetup = parsed.setup
+
+if (parsed.setupIfNotConfigured) {
+  // Open the modal only when the target server isn't in the DB yet.
+  const { getDatabase } = await import('./services/database')
+  const allServers = getDatabase().getAllServers()
+  const alreadyConfigured = parsed.server
+    ? allServers.some(
+        (s) => s.host === parsed.server && s.port === (parsed.port ?? (parsed.ssl ? 6697 : 6667))
+      )
+    : allServers.length > 0
+  wantsSetup = !alreadyConfigured
+}
+
+globalThis.__SETUP_MODE__ = wantsSetup
+globalThis.__CLI_PREFILL__ = wantsSetup
+  ? {
+      host: parsed.server,
+      port: parsed.port ?? (parsed.ssl ? 6697 : 6667),
+      nick: parsed.nick,
+      ssl: parsed.ssl,
+      channels: parsed.channels.length > 0 ? parsed.channels : undefined,
+    }
+  : undefined
+
 // ── Bootstrap server from CLI flags ──────────────────────────────────────────
 
-if (parsed.server) {
+// --setup / --setup-if-not-configured skip auto-bootstrap; connection happens
+// after the user submits the connect modal.
+if (parsed.server && !wantsSetup) {
   const defaultPort = parsed.ssl ? 6697 : 6667
   bootstrapServer({
     host: parsed.server,

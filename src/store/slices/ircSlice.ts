@@ -22,10 +22,49 @@ export interface IRCSlice {
   clearTypingUser: (channelId: string, nick: string) => void
   initializeIRC: () => void
   setupEventHandlers: () => void
+  startKeepalive: (serverId: string) => void
+  scheduleReconnect: (serverId: string) => void
 }
 
 // Module-level timer storage to avoid storing timers in Zustand state
 const typingTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+// Servers for which auto-reconnect is suppressed (explicit user disconnect).
+export const noAutoReconnectServers = new Set<string>()
+
+interface KeepaliveState {
+  pingInterval: ReturnType<typeof setInterval> | null
+  pongTimeout: ReturnType<typeof setTimeout> | null
+  reconnectTimeout: ReturnType<typeof setTimeout> | null
+  reconnectAttempts: number
+}
+
+const keepaliveState = new Map<string, KeepaliveState>()
+const PING_INTERVAL_MS = 30_000
+const PONG_TIMEOUT_MS = 30_000
+// Backoff delays for successive reconnect attempts (ms)
+const RECONNECT_DELAYS_MS = [3_000, 6_000, 12_000, 24_000, 30_000]
+
+function getOrCreateKeepalive(serverId: string): KeepaliveState {
+  if (!keepaliveState.has(serverId)) {
+    keepaliveState.set(serverId, {
+      pingInterval: null,
+      pongTimeout: null,
+      reconnectTimeout: null,
+      reconnectAttempts: 0,
+    })
+  }
+  return keepaliveState.get(serverId)!
+}
+
+function stopKeepaliveForServer(serverId: string): void {
+  const state = keepaliveState.get(serverId)
+  if (!state) return
+  if (state.pingInterval) clearInterval(state.pingInterval)
+  if (state.pongTimeout) clearTimeout(state.pongTimeout)
+  state.pingInterval = null
+  state.pongTimeout = null
+}
 
 interface PendingReaction {
   channelId: string
@@ -113,6 +152,16 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       })
       addServerMessage(data.serverId, `Registered on server as ${data.nickname}`)
 
+      // Successful (re)connection — reset reconnect state and start keepalive.
+      noAutoReconnectServers.delete(data.serverId)
+      const ks = getOrCreateKeepalive(data.serverId)
+      if (ks.reconnectTimeout) {
+        clearTimeout(ks.reconnectTimeout)
+        ks.reconnectTimeout = null
+      }
+      ks.reconnectAttempts = 0
+      get().startKeepalive(data.serverId)
+
       // Auto-join channels — same flow as channelActions.ts.
       // Joining here (on IRC 001) is reliable: the socket is open and registered.
       const db = getDatabase()
@@ -153,6 +202,16 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
         addServerMessage(data.serverId, 'Connected to server')
       } else if (data.connectionState === 'disconnected') {
         addServerMessage(data.serverId, 'Disconnected from server')
+      }
+    })
+
+    // Socket-level disconnect — schedule auto-reconnect unless suppressed.
+    ;(ircClient as any).on('disconnect', (data: { serverId: string }) => {
+      debugLog?.(`[Store] disconnect: ${data.serverId}`)
+      stopKeepaliveForServer(data.serverId)
+      ircClient.offPong(data.serverId)
+      if (!noAutoReconnectServers.has(data.serverId)) {
+        get().scheduleReconnect(data.serverId)
       }
     })
 
@@ -617,8 +676,8 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
           })
         }
 
-        // Always add the system message (historical or live) if the user was/is in the channel
-        if (userInChannel || !data.batchTag) {
+        // Only show the quit message in channels the user was actually in
+        if (userInChannel) {
           const message: Message = {
             id: uuidv4(),
             type: 'quit',
@@ -911,5 +970,94 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
         pendingHistoryReactions.delete(targetMsgId)
       }
     })
+  },
+
+  startKeepalive: (serverId) => {
+    const { ircClient } = get()
+    if (!ircClient) return
+
+    stopKeepaliveForServer(serverId)
+    const state = getOrCreateKeepalive(serverId)
+
+    ircClient.onPong(serverId, () => {
+      debugLog?.(`[Keepalive] PONG received for ${serverId}`)
+      if (state.pongTimeout) {
+        clearTimeout(state.pongTimeout)
+        state.pongTimeout = null
+      }
+    })
+
+    state.pingInterval = setInterval(() => {
+      const server = get().servers.find((s) => s.id === serverId)
+      if (!server?.isConnected) return
+      debugLog?.(`[Keepalive] Sending PING to ${serverId}`)
+      ircClient.sendRaw(serverId, `PING :tobby-${Date.now()}`)
+      if (state.pongTimeout) clearTimeout(state.pongTimeout)
+      state.pongTimeout = setTimeout(() => {
+        debugLog?.(`[Keepalive] PONG timeout for ${serverId}, triggering reconnect`)
+        stopKeepaliveForServer(serverId)
+        ircClient.offPong(serverId)
+        if (!noAutoReconnectServers.has(serverId)) {
+          get().scheduleReconnect(serverId)
+        }
+      }, PONG_TIMEOUT_MS)
+    }, PING_INTERVAL_MS)
+  },
+
+  scheduleReconnect: (serverId) => {
+    const state = getOrCreateKeepalive(serverId)
+    // Don't double-schedule
+    if (state.reconnectTimeout) return
+
+    const { servers, clearMessages, updateServer, addMessage } = get()
+    const server = servers.find((s) => s.id === serverId)
+    if (!server) return
+
+    const delay =
+      RECONNECT_DELAYS_MS[Math.min(state.reconnectAttempts, RECONNECT_DELAYS_MS.length - 1)]!
+    state.reconnectAttempts++
+
+    // Clear channel buffers so chathistory loads fresh after reconnect
+    for (const ch of server.channels) clearMessages(ch.id)
+    for (const pc of server.privateChats) clearMessages(pc.id)
+    clearMessages(serverId)
+
+    updateServer(serverId, { isConnected: false, connectionState: 'reconnecting' })
+
+    addMessage(serverId, {
+      id: uuidv4(),
+      type: 'system',
+      content: `Connection lost. Reconnecting in ${Math.round(delay / 1000)}s\u2026`,
+      timestamp: new Date(),
+      userId: 'server',
+      channelId: serverId,
+      serverId,
+      reactions: [],
+      replyMessage: null,
+      mentioned: [],
+    })
+
+    state.reconnectTimeout = setTimeout(async () => {
+      state.reconnectTimeout = null
+      const { ircClient, servers: current } = get()
+      if (!ircClient) return
+      const srv = current.find((s) => s.id === serverId)
+      if (!srv) return
+      debugLog?.(`[Reconnect] Attempt ${state.reconnectAttempts} for ${srv.host}:${srv.port}`)
+      try {
+        await ircClient.connect(
+          srv.name,
+          srv.host,
+          srv.port,
+          srv.nickname,
+          srv.password,
+          srv.saslUsername,
+          srv.saslPassword,
+          srv.id
+        )
+      } catch {
+        get().scheduleReconnect(serverId)
+      }
+    }, delay)
   },
 })

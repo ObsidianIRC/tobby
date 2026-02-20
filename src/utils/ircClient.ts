@@ -18,9 +18,19 @@ export class IRCClient extends BaseIRCClient {
   // Populated just before handleMessage() and read by ircSlice event handlers.
   // Safe because JS is single-threaded — the handler runs synchronously inside handleMessage.
   private _lastMsgTime = new Map<string, Date>()
+  // Callbacks invoked whenever a PONG is received for a given server (used for keepalive).
+  private _pongCallbacks = new Map<string, () => void>()
 
   getLastMessageTime(serverId: string): Date {
     return this._lastMsgTime.get(serverId) ?? new Date()
+  }
+
+  onPong(serverId: string, cb: () => void): void {
+    this._pongCallbacks.set(serverId, cb)
+  }
+
+  offPong(serverId: string): void {
+    this._pongCallbacks.delete(serverId)
   }
 
   override async connect(
@@ -157,6 +167,8 @@ export class IRCClient extends BaseIRCClient {
             text,
             raw: line,
           })
+        } else if (command === 'PONG') {
+          this._pongCallbacks.get(server.id)?.()
         }
       }
     }

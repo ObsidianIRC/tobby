@@ -2,6 +2,10 @@ import type { ActionContext } from '@/types'
 import type { AppStore } from '@/store'
 import type { ActionRegistry } from '@/actions'
 import { v4 as uuidv4 } from 'uuid'
+import { noAutoReconnectServers } from '@/store/slices/ircSlice'
+import { getDatabase } from '@/services/database'
+import { deterministicChannelId } from '@/utils/bootstrapServer'
+import type { Channel } from '@/types'
 
 export function registerServerActions(registry: ActionRegistry<AppStore>) {
   // Connect to server
@@ -48,6 +52,7 @@ export function registerServerActions(registry: ActionRegistry<AppStore>) {
         password?: string
         saslUsername?: string
         saslPassword?: string
+        channels?: string[]
       }
     ) => {
       if (!params) {
@@ -61,7 +66,7 @@ export function registerServerActions(registry: ActionRegistry<AppStore>) {
 
       const serverId = uuidv4()
 
-      // Add server to store first
+      // Add server to store (and DB) first
       store.addServer({
         id: serverId,
         name: params.name,
@@ -76,6 +81,18 @@ export function registerServerActions(registry: ActionRegistry<AppStore>) {
         channels: [],
         privateChats: [],
       })
+
+      // Persist auto-join channels now that the server row exists in the DB
+      if (params.channels?.length) {
+        const db = getDatabase()
+        for (const ch of params.channels) {
+          const name = ch.startsWith('#') ? ch : `#${ch}`
+          db.saveChannel(
+            { id: deterministicChannelId(serverId, name), name, serverId } as Channel,
+            serverId
+          )
+        }
+      }
 
       // Set as current server immediately
       store.setCurrentServer(serverId)
@@ -127,7 +144,8 @@ export function registerServerActions(registry: ActionRegistry<AppStore>) {
         throw new Error('No server connected')
       }
 
-      // Disconnect from IRC server
+      // Disconnect from IRC server (suppress auto-reconnect)
+      noAutoReconnectServers.add(currentServer.id)
       ircClient.disconnect(currentServer.id)
 
       // Update server state
@@ -162,8 +180,10 @@ export function registerServerActions(registry: ActionRegistry<AppStore>) {
         throw new Error('No server selected')
       }
 
-      // If already connected, disconnect first
+      // If already connected, disconnect first.
+      // Mark so auto-reconnect doesn't race with our manual reconnect below.
       if (currentServer.isConnected) {
+        noAutoReconnectServers.add(currentServer.id)
         ircClient.disconnect(currentServer.id)
       }
 
@@ -214,6 +234,7 @@ export function registerServerActions(registry: ActionRegistry<AppStore>) {
       const idx = servers.findIndex((s) => s.id === currentServer.id)
 
       if (currentServer.isConnected && ircClient) {
+        noAutoReconnectServers.add(currentServer.id)
         ircClient.sendRaw(currentServer.id, 'QUIT :Disconnecting')
         ircClient.disconnect(currentServer.id)
       }
@@ -257,6 +278,7 @@ export function registerServerActions(registry: ActionRegistry<AppStore>) {
       // Single server — remove directly
       const server = servers[0]!
       if (server.isConnected && ircClient) {
+        noAutoReconnectServers.add(server.id)
         ircClient.disconnect(server.id)
       }
       store.removeServer(server.id)

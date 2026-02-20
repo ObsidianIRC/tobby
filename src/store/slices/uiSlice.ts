@@ -52,7 +52,7 @@ export const createUISlice: StateCreator<AppStore, [], [], UISlice> = (set, get)
   setTerminalDimensions: (width, height) => set({ terminalWidth: width, terminalHeight: height }),
   setCurrentServer: (serverId) => set({ currentServerId: serverId }),
   setCurrentChannel: (channelId) => {
-    set({ currentChannelId: channelId })
+    set({ currentChannelId: channelId, selectedMessage: null })
     if (channelId) {
       const { servers, updateChannel, updatePrivateChat } = get()
       for (const server of servers) {

@@ -89,6 +89,12 @@ export const createServersSlice: StateCreator<ServersSlice> = (set, get) => ({
       ),
     }))
 
+    // If this is the current server and no channel is focused yet, jump to this one
+    const { currentServerId, currentChannelId, setCurrentChannel } = get()
+    if (currentServerId === serverId && !currentChannelId) {
+      setCurrentChannel(channel.id)
+    }
+
     if (persist) {
       try {
         const db = getDatabase()
@@ -256,6 +262,14 @@ export const createServersSlice: StateCreator<ServersSlice> = (set, get) => ({
       })
 
       set({ servers })
+
+      // Auto-focus the first server/channel so the app never lands on the blank screen
+      const { currentServerId, setCurrentServer, setCurrentChannel } = get()
+      if (!currentServerId && servers.length > 0) {
+        const first = servers[0]!
+        setCurrentServer(first.id)
+        if (first.channels.length > 0) setCurrentChannel(first.channels[0]!.id)
+      }
     } catch (error) {
       console.error('Failed to load persisted servers:', error)
     }

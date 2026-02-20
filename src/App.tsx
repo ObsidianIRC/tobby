@@ -25,10 +25,16 @@ export function App() {
     debugLog?.('App mounted, loading persisted servers and initializing IRC')
     loadPersistedServers()
     initializeIRC()
+    // --setup: open the connect modal so the user can fill in server details
+    if (globalThis.__SETUP_MODE__) {
+      setTimeout(() => useStore.getState().openModal('connect'), 50)
+    }
   }, [initializeIRC, loadPersistedServers])
 
-  // Auto-connect to servers after they're loaded and IRC is initialized
+  // Auto-connect to servers after they're loaded and IRC is initialized.
+  // Skipped in --setup mode — connection happens after the modal is submitted.
   useEffect(() => {
+    if (globalThis.__SETUP_MODE__) return
     if (ircClient && servers.length > 0 && !hasAutoConnected.current) {
       hasAutoConnected.current = true
       debugLog?.('Scheduling auto-connect in 1 second...')

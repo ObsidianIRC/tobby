@@ -5,7 +5,7 @@ import type { Server, Channel } from '../types'
 // Must match the namespace and formula used in ObsidianIRC/src/lib/ircClient.ts
 const CHANNEL_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8'
 
-function deterministicChannelId(serverId: string, channelName: string): string {
+export function deterministicChannelId(serverId: string, channelName: string): string {
   return uuidv5(`${serverId}:${channelName}`, CHANNEL_NAMESPACE)
 }
 

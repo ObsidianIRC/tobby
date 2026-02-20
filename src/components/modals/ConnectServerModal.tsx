@@ -8,20 +8,28 @@ interface ConnectServerModalProps {
   height: number
 }
 
-const FIELDS: FormField[] = [
-  { key: 'name', label: 'Server Name', placeholder: 'My Server' },
-  { key: 'host', label: 'Host', placeholder: 'irc.example.com' },
-  { key: 'port', label: 'Port', placeholder: '6697', defaultValue: '6697' },
-  { key: 'nickname', label: 'Nickname', placeholder: 'username' },
-  { key: 'password', label: 'Password', placeholder: '(optional)', secret: true },
-  { key: 'saslUsername', label: 'SASL Username', placeholder: '(optional)' },
-  { key: 'saslPassword', label: 'SASL Password', placeholder: '(optional)', secret: true },
-]
-
 export function ConnectServerModal({ width, height }: ConnectServerModalProps) {
   const { registry, ircClient, renderer } = useAppContext()
   const store = useStore()
   const closeModal = useStore((state) => state.closeModal)
+
+  // Prefill from --setup CLI args if present
+  const prefill = globalThis.__CLI_PREFILL__
+  const defaultPort = String(prefill?.port ?? 6697)
+  const fields: FormField[] = [
+    { key: 'name', label: 'Server Name', placeholder: 'My Server', defaultValue: prefill?.host },
+    {
+      key: 'host',
+      label: 'Host',
+      placeholder: 'irc.example.com',
+      defaultValue: prefill?.host,
+    },
+    { key: 'port', label: 'Port', placeholder: '6697', defaultValue: defaultPort },
+    { key: 'nickname', label: 'Nickname', placeholder: 'username', defaultValue: prefill?.nick },
+    { key: 'password', label: 'Password', placeholder: '(optional)', secret: true },
+    { key: 'saslUsername', label: 'SASL Username', placeholder: '(optional)' },
+    { key: 'saslPassword', label: 'SASL Password', placeholder: '(optional)', secret: true },
+  ]
 
   const handleSubmit = (values: Record<string, string>) => {
     if (!values.name || !values.host || !values.nickname || !ircClient) return
@@ -35,6 +43,7 @@ export function ConnectServerModal({ width, height }: ConnectServerModalProps) {
       password: values.password || undefined,
       saslUsername: values.saslUsername || undefined,
       saslPassword: values.saslPassword || undefined,
+      channels: globalThis.__CLI_PREFILL__?.channels,
     }
 
     registry.execute('server.connectWith', context, params)
@@ -46,7 +55,7 @@ export function ConnectServerModal({ width, height }: ConnectServerModalProps) {
       width={width}
       height={height}
       title="Add Server"
-      fields={FIELDS}
+      fields={fields}
       onSubmit={handleSubmit}
       onCancel={closeModal}
       submitLabel="Connect"

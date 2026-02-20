@@ -29,7 +29,9 @@ export const createMessagesSlice: StateCreator<MessagesSlice> = (set, get) => ({
       // Sort by server-time timestamp so history blocks slot into the correct
       // chronological position relative to live messages and each other.
       merged.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
-      newMessages.set(channelId, merged)
+      // Keep only the most recent 1000 messages per channel to bound memory usage.
+      const capped = merged.length > 1000 ? merged.slice(merged.length - 1000) : merged
+      newMessages.set(channelId, capped)
       return { messages: newMessages }
     }),
 
