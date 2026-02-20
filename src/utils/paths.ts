@@ -33,3 +33,29 @@ export function getDataPath(): string {
 export function getDatabasePath(): string {
   return path.join(getDataPath(), 'obbytty.db')
 }
+
+export function resolveDatabasePath(customPath: string): string {
+  const resolved = path.resolve(customPath)
+
+  if (fs.existsSync(resolved)) {
+    const stat = fs.statSync(resolved)
+    if (stat.isDirectory()) {
+      return path.join(resolved, 'obbytty.db')
+    }
+    return resolved
+  }
+
+  // Path doesn't exist — decide file vs directory by presence of extension
+  if (path.extname(resolved)) {
+    // Treat as file: ensure parent directory exists
+    const parent = path.dirname(resolved)
+    if (!fs.existsSync(parent)) {
+      fs.mkdirSync(parent, { recursive: true })
+    }
+    return resolved
+  }
+
+  // No extension — treat as directory
+  fs.mkdirSync(resolved, { recursive: true })
+  return path.join(resolved, 'obbytty.db')
+}

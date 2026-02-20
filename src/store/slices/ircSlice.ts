@@ -4,6 +4,7 @@ import type { AppStore } from '@/store'
 import type { Message, User } from '@/types'
 import { v4 as uuidv4 } from 'uuid'
 import { stripIrcFormatting } from '@irc/messageFormatter'
+import { getDatabase } from '@/services/database'
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -104,13 +105,40 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
 
     // Connection events
     ircClient.on('ready', (data: EventMap['ready']) => {
-      const { updateServer } = get()
+      const { updateServer, getServer, addChannel } = get()
       updateServer(data.serverId, {
         isConnected: true,
         connectionState: 'connected',
         nickname: data.nickname,
       })
       addServerMessage(data.serverId, `Registered on server as ${data.nickname}`)
+
+      // Auto-join channels — same flow as channelActions.ts.
+      // Joining here (on IRC 001) is reliable: the socket is open and registered.
+      const db = getDatabase()
+      const autoJoinChannels = db.getAutoJoinChannels(data.serverId)
+      const server = getServer(data.serverId)
+      for (const ch of autoJoinChannels) {
+        const ircCh = ircClient.joinChannel(data.serverId, ch.name)
+        if (!ircCh) continue
+        // If the channel is already in the store (loaded from DB), no need to add it again.
+        // NAMES events will populate users once the JOIN is confirmed by the server.
+        const existing = server?.channels.find((c) => c.name === ch.name)
+        if (!existing) {
+          // Mirror channelActions.ts: add to store with the IRC client's deterministic ID
+          addChannel(data.serverId, {
+            id: ircCh.id,
+            name: ircCh.name,
+            serverId: data.serverId,
+            topic: '',
+            users: [],
+            messages: [],
+            unreadCount: 0,
+            isPrivate: false,
+            isMentioned: false,
+          })
+        }
+      }
     })
 
     ircClient.on('connectionStateChange', (data: EventMap['connectionStateChange']) => {
@@ -485,21 +513,25 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       const channel = server.channels.find((c) => c.name === data.channelName)
       if (!channel) return
 
-      // Self-join: clear users list so the incoming 353/NAMES events populate it cleanly
-      if (data.username === server.nickname) {
-        updateChannel(data.serverId, channel.id, { users: [] })
-      } else {
-        const user: User = {
-          id: uuidv4(),
-          username: data.username,
-          isOnline: true,
-          status: 'online',
-          account: data.account,
-          realname: data.realname,
+      // Historical events (chathistory batch replays) must NOT touch the live user list.
+      // A historical self-JOIN would otherwise clear the users that 353 NAMES just populated.
+      if (!data.batchTag) {
+        if (data.username === server.nickname) {
+          // Real self-join: clear users so the incoming 353/NAMES events populate it cleanly
+          updateChannel(data.serverId, channel.id, { users: [] })
+        } else {
+          const user: User = {
+            id: uuidv4(),
+            username: data.username,
+            isOnline: true,
+            status: 'online',
+            account: data.account,
+            realname: data.realname,
+          }
+          updateChannel(data.serverId, channel.id, {
+            users: [...channel.users, user],
+          })
         }
-        updateChannel(data.serverId, channel.id, {
-          users: [...channel.users, user],
-        })
       }
 
       // Add system message
@@ -508,7 +540,7 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
         id: uuidv4(),
         type: 'join',
         content: `${data.username} has joined ${data.channelName}`,
-        timestamp: data.timestamp,
+        timestamp: ircClient.getLastMessageTime(data.serverId),
         userId: data.username,
         channelId: channel.id,
         serverId: data.serverId,
@@ -557,7 +589,7 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
           id: uuidv4(),
           type: 'part',
           content: `${data.username} has left ${data.channelName}${data.reason ? ` (${data.reason})` : ''}`,
-          timestamp: data.timestamp,
+          timestamp: ircClient.getLastMessageTime(data.serverId),
           userId: data.username,
           channelId: channel.id,
           serverId: data.serverId,
@@ -575,20 +607,23 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       const server = getServer(data.serverId)
       if (!server) return
 
-      // Remove user from all channels
+      // Historical QUIT events (from chathistory batch) must not touch the live user list
       for (const channel of server.channels) {
         const userInChannel = channel.users.find((u) => u.username === data.username)
-        if (userInChannel) {
+
+        if (!data.batchTag && userInChannel) {
           updateChannel(data.serverId, channel.id, {
             users: channel.users.filter((u) => u.username !== data.username),
           })
+        }
 
-          // Add system message
+        // Always add the system message (historical or live) if the user was/is in the channel
+        if (userInChannel || !data.batchTag) {
           const message: Message = {
             id: uuidv4(),
             type: 'quit',
             content: `${data.username} has quit${data.reason ? ` (${data.reason})` : ''}`,
-            timestamp: data.timestamp,
+            timestamp: ircClient.getLastMessageTime(data.serverId),
             userId: data.username,
             channelId: channel.id,
             serverId: data.serverId,

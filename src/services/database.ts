@@ -27,11 +27,17 @@ export interface PersistedChannel {
   created_at: number
 }
 
+let _customDbPath: string | null = null
+
+export function setDatabasePath(p: string): void {
+  _customDbPath = p
+}
+
 class DatabaseService {
   private db: Database
 
   constructor() {
-    const dbPath = getDatabasePath()
+    const dbPath = _customDbPath ?? getDatabasePath()
     this.db = new Database(dbPath)
     this.initialize()
   }

@@ -1,6 +1,5 @@
 import { useStore } from '../store'
 import type { IRCClient } from './ircClient'
-import { getDatabase } from '../services/database'
 
 export async function autoConnectServers(ircClient: IRCClient) {
   const { servers } = useStore.getState()
@@ -24,30 +23,9 @@ export async function autoConnectServers(ircClient: IRCClient) {
         server.id
       )
 
-      debugLog?.(`Connect call completed for ${server.name}, waiting for connection...`)
-
-      // Wait a bit for connection to establish
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-
-      debugLog?.(`Connection wait done for ${server.name}, joining channels...`)
-
-      // Auto-join channels
-      const db = getDatabase()
-      const autoJoinChannels = db.getAutoJoinChannels(server.id)
-
-      debugLog?.(
-        `Auto-join channels for ${server.name}:`,
-        autoJoinChannels.map((c) => c.name).join(', ')
-      )
-
-      for (const channel of autoJoinChannels) {
-        try {
-          await ircClient.joinChannel(server.id, channel.name)
-          debugLog?.(`Auto-joined ${channel.name} on ${server.name}`)
-        } catch (error) {
-          debugLog?.(`Failed to auto-join ${channel.name}:`, error)
-        }
-      }
+      debugLog?.(`Connect call completed for ${server.name}`)
+      // Channel joining is handled in the 'ready' event handler in ircSlice.ts
+      // so that channels are joined only after the IRC connection is fully registered.
     } catch (error) {
       debugLog?.(`Failed to auto-connect to ${server.name}:`, error)
     }

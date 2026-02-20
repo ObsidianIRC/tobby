@@ -14,6 +14,15 @@ export type IRCEventCallback<K extends IRCEventKey> = (data: EventMap[K]) => voi
  * using Node.js sockets instead.
  */
 export class IRCClient extends BaseIRCClient {
+  // Side-channel: the IRC `time` tag of the message currently being processed.
+  // Populated just before handleMessage() and read by ircSlice event handlers.
+  // Safe because JS is single-threaded — the handler runs synchronously inside handleMessage.
+  private _lastMsgTime = new Map<string, Date>()
+
+  getLastMessageTime(serverId: string): Date {
+    return this._lastMsgTime.get(serverId) ?? new Date()
+  }
+
   override async connect(
     name: string,
     host: string,
@@ -84,6 +93,19 @@ export class IRCClient extends BaseIRCClient {
       const rawLines = event.data.split('\r\n')
       for (const rawLine of rawLines) {
         if (rawLine.trim()) {
+          // Extract the IRC `time` tag before the base class fires any events.
+          // The base class calls triggerEvent() synchronously inside handleMessage(),
+          // so _lastMsgTime will hold the correct value when ircSlice handlers run.
+          if (rawLine.startsWith('@')) {
+            const tagEnd = rawLine.indexOf(' ')
+            const timeTag = rawLine
+              .slice(1, tagEnd)
+              .split(';')
+              .find((t) => t.startsWith('time='))
+            this._lastMsgTime.set(server.id, timeTag ? new Date(timeTag.slice(5)) : new Date())
+          } else {
+            this._lastMsgTime.set(server.id, new Date())
+          }
           ;(this as any).handleMessage(rawLine + '\r\n', server.id)
         }
       }
