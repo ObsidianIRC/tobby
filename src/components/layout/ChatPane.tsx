@@ -15,6 +15,26 @@ const SELECTABLE_TYPES: Message['type'][] = ['message', 'action']
 // [HH:MM] = 7 chars, space = 1, nick = variable, ' › ' = 3
 const contentOffset = (nick: string) => 11 + nick.length
 
+// Split text into lines at word boundaries, never exceeding maxWidth per line.
+function wordWrap(text: string, maxWidth: number): string[] {
+  if (maxWidth <= 0 || text.length <= maxWidth) return [text]
+  const words = text.split(' ')
+  const lines: string[] = []
+  let current = ''
+  for (const word of words) {
+    if (!current) {
+      current = word
+    } else if (current.length + 1 + word.length <= maxWidth) {
+      current += ' ' + word
+    } else {
+      lines.push(current)
+      current = word
+    }
+  }
+  if (current) lines.push(current)
+  return lines.length > 0 ? lines : [text]
+}
+
 function MultilineMessageView({
   msg,
   username,
@@ -146,9 +166,35 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
     messagesHeightRef.current = messagesHeight
   }, [messagesHeight])
 
+  // Available content width after prefix and padding (1 scrollbar + 2 box padding)
+  const contentWidth = (nick: string) => Math.max(10, width - 3 - contentOffset(nick))
+
+  const formatTimestamp = (date: Date) => {
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    return `${hours}:${minutes}`
+  }
+
+  const formatMessage = (msg: Message) => {
+    const timestamp = formatTimestamp(msg.timestamp)
+    const user = currentChannel?.users.find(
+      (u) => u.username === msg.userId || u.nickname === msg.userId
+    )
+    const username = user?.nickname || user?.username || msg.userId
+
+    // Return object with parts for colored rendering
+    return { timestamp, username, msg }
+  }
+
   // Compute rendered line-height of a single message box
   const msgLineCount = (msg: Message, isSelected: boolean) => {
     let h = 1 // first line always
+    // Account for word-wrapped single-line messages
+    if (!msg.isMultiline && (msg.type === 'message' || msg.type === 'action')) {
+      const { username } = formatMessage(msg)
+      const wrapped = wordWrap(stripIrcFormatting(msg.content), contentWidth(username))
+      if (wrapped.length > 1) h += wrapped.length - 1
+    }
     if (msg.isMultiline && msg.lines && msg.lines.length > 1) {
       if (isSelected || expandMultilines) {
         h += msg.lines.length - 1 // all remaining lines visible
@@ -232,23 +278,6 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
     }
   }, [selectedMessage, messagesHeight])
 
-  const formatTimestamp = (date: Date) => {
-    const hours = String(date.getHours()).padStart(2, '0')
-    const minutes = String(date.getMinutes()).padStart(2, '0')
-    return `${hours}:${minutes}`
-  }
-
-  const formatMessage = (msg: Message) => {
-    const timestamp = formatTimestamp(msg.timestamp)
-    const user = currentChannel?.users.find(
-      (u) => u.username === msg.userId || u.nickname === msg.userId
-    )
-    const username = user?.nickname || user?.username || msg.userId
-
-    // Return object with parts for colored rendering
-    return { timestamp, username, msg }
-  }
-
   // Collect all member nicks for inline coloring — stable reference via useMemo would be ideal
   // but for a terminal app the re-render cost is negligible
   const channelUsernames = currentChannel?.users.map((u) => u.username) ?? []
@@ -258,7 +287,29 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
     const nicknameColor = getNicknameColor(username)
 
     switch (msg.type) {
-      case 'message':
+      case 'message': {
+        const offset = contentOffset(username)
+        const lines = wordWrap(stripIrcFormatting(msg.content), contentWidth(username))
+        if (lines.length > 1) {
+          return (
+            <box flexDirection="column">
+              <text>
+                <span fg={THEME.dimText}>[{timestamp}]</span>
+                <span fg={nicknameColor}> {username}</span>
+                <span fg={THEME.mutedText}> › </span>
+                <span fg={THEME.foreground}>{lines[0]}</span>
+              </text>
+              {lines.slice(1).map((line, i) => (
+                <text key={i}>
+                  <span fg={THEME.foreground}>
+                    {' '.repeat(offset)}
+                    {line}
+                  </span>
+                </text>
+              ))}
+            </box>
+          )
+        }
         return (
           <text>
             <span fg={THEME.dimText}>[{timestamp}]</span>
@@ -269,7 +320,31 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
             </span>
           </text>
         )
-      case 'action':
+      }
+      case 'action': {
+        const offset = contentOffset(username)
+        const lines = wordWrap(stripIrcFormatting(msg.content), contentWidth(username))
+        if (lines.length > 1) {
+          return (
+            <box flexDirection="column">
+              <text>
+                <span fg={THEME.dimText}>[{timestamp}]</span>
+                <span fg={COLORS.magenta}>
+                  {' '}
+                  * {username} {lines[0]}
+                </span>
+              </text>
+              {lines.slice(1).map((line, i) => (
+                <text key={i}>
+                  <span fg={COLORS.magenta}>
+                    {' '.repeat(offset)}
+                    {line}
+                  </span>
+                </text>
+              ))}
+            </box>
+          )
+        }
         return (
           <text>
             <span fg={THEME.dimText}>[{timestamp}]</span>
@@ -280,6 +355,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
             </span>
           </text>
         )
+      }
       case 'notice':
         return (
           <text>
