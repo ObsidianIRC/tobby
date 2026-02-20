@@ -63,6 +63,7 @@ export class CommandParser {
           '  • /nick <newnick>                Change nickname',
           '  • /topic [new topic]             Get/set topic',
           '  • /whois <nick>                  User info',
+          '  • /close                         Close current DM window',
           '  • /names                         List users in channel',
           '  • /away [message]                Set/clear away',
           '  • /quit [reason]                 Quit',
@@ -311,6 +312,29 @@ export class CommandParser {
         }
         ctx.ircClient.whois(ctx.currentServer.id, nick)
         return { success: true, message: `Requesting whois for ${nick}...` }
+      },
+    })
+
+    this.register({
+      name: 'close',
+      aliases: [],
+      description: 'Close the current DM window',
+      usage: '/close',
+      minArgs: 0,
+      maxArgs: 0,
+      execute: async (_, ctx) => {
+        const { currentServerId, currentChannelId, servers } = ctx.store
+        if (!currentServerId || !currentChannelId) {
+          return { success: false, message: 'No DM window open' }
+        }
+        const server = servers.find((s) => s.id === currentServerId)
+        const pm = server?.privateChats.find((pc) => pc.id === currentChannelId)
+        if (!pm) {
+          return { success: false, message: 'Current buffer is not a DM' }
+        }
+        ctx.store.removePrivateChat(currentServerId, pm.id)
+        ctx.store.setCurrentChannel(null)
+        return { success: true }
       },
     })
 

@@ -32,6 +32,7 @@ const COMMANDS = [
   'history',
   'whisper',
   'clear',
+  'close',
   'disconnect',
   'query',
   'quote',
