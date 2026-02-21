@@ -20,6 +20,41 @@ declare global {
 
 globalThis.__APP_VERSION__ = '0.1.0'
 
+// ── Fix Bun.stringWidth for ZWJ emoji sequences ───────────────────────────────
+// Bun.stringWidth counts each component of a ZWJ sequence separately
+// (e.g. 😵‍💫 = 😵 + U+200D + 💫 → width 4). Whether that matches the terminal's
+// actual rendering depends on the terminal:
+//
+//   • iTerm2 (and most modern terminals): combines ZWJ sequences into a single
+//     2-column glyph  → Bun says 4, terminal uses 2 → bleed without this patch
+//   • Kitty: renders ZWJ components individually (4 columns total)
+//     → Bun says 4, terminal uses 4 → already correct, patch would break it
+//
+// Detect Kitty via its environment variables and skip the patch there.
+const _isKitty = process.env.KITTY_WINDOW_ID !== undefined || process.env.TERM === 'xterm-kitty'
+
+if (!_isKitty) {
+  const _origStringWidth = Bun.stringWidth
+  const _graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+  Bun.stringWidth = (str: string) => {
+    // Fast path: no ZWJ → original handles everything (including ANSI stripping)
+    if (!str.includes('\u200D')) return _origStringWidth(str)
+    // Walk grapheme clusters. For ZWJ clusters return 2; measure surrounding
+    // text runs with the original so ANSI escape sequences are handled correctly.
+    let width = 0
+    let tail = 0
+    for (const { segment, index } of _graphemeSegmenter.segment(str)) {
+      if (segment.includes('\u200D')) {
+        if (index > tail) width += _origStringWidth(str.slice(tail, index))
+        width += 2
+        tail = index + segment.length
+      }
+    }
+    if (tail < str.length) width += _origStringWidth(str.slice(tail))
+    return width
+  }
+}
+
 // ── Suppress ObsidianIRC reconnect noise from the opentui console panel ─────
 // These messages are expected operational events already surfaced in the server
 // buffer. Keeping them out of the error console reduces false-alarm popups.

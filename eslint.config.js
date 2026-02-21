@@ -36,6 +36,7 @@ export default [
         React: 'readonly',
         Timer: 'readonly',
         require: 'readonly',
+        Bun: 'readonly',
       },
     },
     plugins: {
