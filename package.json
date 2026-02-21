@@ -22,7 +22,7 @@
     "lint:fix": "eslint src tests --fix && prettier --write 'src/**/*.{ts,tsx}' 'tests/**/*.{ts,tsx}'",
     "format": "prettier --write 'src/**/*.{ts,tsx}' 'tests/**/*.{ts,tsx}'",
     "typecheck": "bash -c 'tsc --noEmit 2>&1 | grep -E \"^(src/|tests/)\" > /tmp/tsc-out.txt; if [ -s /tmp/tsc-out.txt ]; then cat /tmp/tsc-out.txt; exit 1; fi'",
-    "prepare": "husky install",
+    "prepare": "husky",
     "db:clear": "bun run scripts/clear-database.ts"
   },
   "devDependencies": {

@@ -6,8 +6,17 @@
 
 ```sh
 npm install -g tobby
+
 # or run without installing:
 npx tobby
+
+# or use without running
+ssh h4ks.com
+
+# In archlinux
+yay -S tobby
+# or
+yay -S tobby-bin
 ```
 
 > Requires [Bun](https://bun.sh/docs/installation) to be installed.
@@ -16,9 +25,16 @@ npx tobby
 
 ```sh
 tobby
+
+# to see more options:
+tobby --help
 ```
 
 Press **Ctrl+K** to open the action menu. From there you can connect to a server and join channels.
+
+Join a channel with `/join #channel` or open the action menu with `Ctrl+K` and select "Join channel". To send a message, just start typing. Press **Enter** to send, or **Shift+Enter** for a new line.
+
+To react, reply hit `Ctrl+Space` to enter message selection mode, navigate to the message with arrows or `j`/`k`, and press `r` to reply or `e` to add reactions.
 
 ## Keyboard shortcuts
 
@@ -28,9 +44,13 @@ Press **Ctrl+K** to open the action menu. From there you can connect to a server
 |---|---|
 | `Ctrl+K` | Open action menu (connect, join, disconnect, …) |
 | `Ctrl+Space` | Enter message selection / scroll mode |
+| `Ctrl+G` | Toggle members sidebar |
+| `Ctrl+L` | Clear current buffer |
+| `Ctrl+O` | Toggle multiline expand |
+| `Ctrl+M` | Toggle multiline always-on |
 | `Alt+[1-9]` | Switch to buffer by number |
+| `Alt+N` / `Alt+P` | Next / previous buffer |
 | `Tab` | Tab-complete nicks and commands |
-| `Ctrl+M` | Toggle multiline input |
 
 ### Message selection mode (`Ctrl+Space`)
 
@@ -50,19 +70,22 @@ Press **Ctrl+K** to open the action menu. From there you can connect to a server
 | `Enter` | New line |
 | `Ctrl+Enter` | Send message |
 
+
 ## Features
 
 - **IRCv3**: multiline messages, emoji reactions, edit/delete, replies, SASL PLAIN/EXTERNAL, `echo-message`, `chathistory`
 - Three-pane layout: server tree · message buffer · user list
 - Channel browser (`/list`)
 - Nick tab completion with fuzzy emoji picker for reactions
-- Typing indicators
+- Typing notifications
+- vim-like keybindings for navigation and message selection
+- Multi-line support with collapsible messages
 - Persistent config and chat history (SQLite)
 
 ## Development
 
 ```sh
-git clone --recurse-submodules https://github.com/your-username/tobby
+git clone --recurse-submodules https://github.com/ObsidianIRC/tobby
 cd tobby
 # if you already cloned without --recurse-submodules:
 git submodule update --init
@@ -70,18 +93,23 @@ bun install
 bun run dev
 ```
 
-Run tests:
+Run tests and checks:
 
 ```sh
-bun run test
+bun run lint:fix && bun run format && bun run test
+```
+
+Alternatively setup pre-commit hooks.
+
+```sh
+bun run prepare
 ```
 
 Build distributable:
 
 ```sh
 bun run build   # outputs dist/index.js
+
+# install locally:
+npm install -g .  # or npm link
 ```
-
-## License
-
-MIT
