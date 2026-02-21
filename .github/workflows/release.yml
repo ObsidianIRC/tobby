@@ -3,24 +3,20 @@ on:
   push:
     tags: ['v*']
 
+permissions:
+  id-token: write  # Required for OIDC
+  contents: read
+
 jobs:
   # ── Publish to npm ──────────────────────────────────────────────────────────
   publish-npm:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: oven-sh/setup-bun@v2
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
-      - run: bun install
-      - name: Sync version from tag
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json')); p.version='$VERSION'; fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
       - run: bun run build
       - run: npm publish --access public
         env:

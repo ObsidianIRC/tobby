@@ -7,10 +7,10 @@
 ## Install
 
 ```sh
-npm install -g tobby
+npm install -g @mattfillipe/tobby
 
 # or run without installing:
-npx tobby
+npx @mattfillipe/tobby
 
 # or use without running
 ssh h4ks.com

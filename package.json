@@ -1,5 +1,5 @@
 {
-  "name": "tobby",
+  "name": "@mattfillipe/tobby",
   "version": "0.1.0",
   "description": "The Terminal Obby — a modern IRC client for the terminal",
   "type": "module",
