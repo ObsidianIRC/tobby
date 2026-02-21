@@ -3,6 +3,10 @@
   "version": "0.1.4",
   "description": "The Terminal Obby — a modern IRC client for the terminal",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ObsidianIRC/tobby.git"
+  },
   "bin": {
     "tobby": "bin/tobby.js"
   },
