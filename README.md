@@ -1,5 +1,7 @@
 # tobby
 
+<img width="1429" height="797" alt="CopyQ NBYveQ" src="https://github.com/user-attachments/assets/d768019a-2f38-44df-b64c-60f892437ab0" />
+
 **The Terminal Obby** — a keyboard-driven IRC client for the terminal.
 
 ## Install
