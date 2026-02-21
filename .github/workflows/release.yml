@@ -27,27 +27,36 @@ jobs:
 
   # ── Build compiled binaries and create GitHub release ──────────────────────
   publish-binaries:
-    runs-on: ubuntu-latest
     permissions:
       contents: write
+    strategy:
+      matrix:
+        include:
+          - runs-on: ubuntu-latest
+            target: bun-linux-x64
+            artifact: tobby-x86_64-linux
+          - runs-on: ubuntu-24.04-arm
+            target: bun-linux-arm64
+            artifact: tobby-aarch64-linux
+    runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@v4
       - run: git submodule update --init ObsidianIRC
       - uses: oven-sh/setup-bun@v2
       - run: bun install
 
-      - name: Build x86_64 binary
+      - name: Build binary
         run: |
           bun build src/index.tsx \
             --compile \
-            --target=bun-linux-x64 \
-            --outfile tobby-x86_64-linux
+            --target=${{ matrix.target }} \
+            --outfile ${{ matrix.artifact }}
 
-      - name: Create GitHub release and upload binaries
+      - name: Upload to GitHub release
         uses: softprops/action-gh-release@v2
         with:
           name: tobby ${{ github.ref_name }}
           generate_release_notes: true
-          files: tobby-x86_64-linux
+          files: ${{ matrix.artifact }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
