@@ -19,6 +19,7 @@ jobs:
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
+      - run: bun run install
       - run: bun run build
       - run: npm publish --access public
         env:
@@ -37,11 +38,6 @@ jobs:
           submodules: recursive
       - uses: oven-sh/setup-bun@v2
       - run: bun install
-
-      - name: Sync version from tag
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json')); p.version='$VERSION'; fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
 
       - name: Build x86_64 binary
         run: |
