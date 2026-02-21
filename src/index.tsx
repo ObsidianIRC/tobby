@@ -20,6 +20,36 @@ declare global {
 
 globalThis.__APP_VERSION__ = '0.1.0'
 
+// ── Suppress ObsidianIRC reconnect noise from the opentui console panel ─────
+// These messages are expected operational events already surfaced in the server
+// buffer. Keeping them out of the error console reduces false-alarm popups.
+const _origLog = console.log
+const _origWarn = console.warn
+const IRC_NOISE = [
+  'Starting CAP negotiation',
+  'Starting reconnection for server',
+  'Reconnection successful for server',
+  'Reconnection failed for server',
+  'rate-limited',
+  'WebSocket ping timeout',
+]
+console.log = (...args: unknown[]) => {
+  const msg = args.map(String).join(' ')
+  if (IRC_NOISE.some((p) => msg.includes(p))) {
+    debugLog?.('[irc-noise]', msg)
+    return
+  }
+  _origLog(...args)
+}
+console.warn = (...args: unknown[]) => {
+  const msg = args.map(String).join(' ')
+  if (IRC_NOISE.some((p) => msg.includes(p))) {
+    debugLog?.('[irc-noise]', msg)
+    return
+  }
+  _origWarn(...args)
+}
+
 // ── Argument parsing ────────────────────────────────────────────────────────
 
 const argv = process.argv.slice(2)

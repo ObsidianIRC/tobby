@@ -92,6 +92,12 @@ export function App() {
     }
 
     if (key.ctrl && key.name === 'l') {
+      const { currentChannelId, clearMessages } = useStore.getState()
+      if (currentChannelId) clearMessages(currentChannelId)
+      return
+    }
+
+    if (key.ctrl && key.name === 'g') {
       toggleUserPane()
       return
     }

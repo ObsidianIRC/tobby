@@ -92,14 +92,14 @@ export function StatusBar({ width }: StatusBarProps) {
           </text>
         )}
         <text>
-          <span fg={THEME.accentCyan}>/help</span>
-          <span fg={THEME.mutedText}> keybindings </span>
+          <span fg={THEME.accentCyan}>Ctrl+Space</span>
+          <span fg={THEME.mutedText}> select </span>
           <span fg={THEME.borderSubtle}>│</span>
           <span fg={THEME.accentCyan}> Ctrl+K</span>
-          <span fg={THEME.mutedText}> commands </span>
+          <span fg={THEME.mutedText}> actions </span>
           <span fg={THEME.borderSubtle}>│</span>
-          <span fg={THEME.accentCyan}> Ctrl+D</span>
-          <span fg={THEME.mutedText}> quit</span>
+          <span fg={THEME.accentCyan}> Ctrl+O</span>
+          <span fg={THEME.mutedText}> multiline</span>
         </text>
       </box>
     </box>
