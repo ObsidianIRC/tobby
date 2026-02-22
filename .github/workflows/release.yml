@@ -54,9 +54,7 @@ jobs:
             --outfile ${{ matrix.artifact }}
 
       - name: Compress binary with UPX
-        run: |
-          sudo apt-get install -y upx-ucl
-          upx --best ${{ matrix.artifact }} || echo "UPX skipped (not compressible)"
+        run: upx ${{ matrix.artifact }} || echo "UPX skipped (not compressible)"
 
       - name: Upload to GitHub release
         uses: softprops/action-gh-release@v2
