@@ -53,8 +53,8 @@ jobs:
             --target=${{ matrix.target }} \
             --outfile ${{ matrix.artifact }}
 
-      - name: Compress binary with UPX
-        run: upx ${{ matrix.artifact }} || echo "UPX skipped (not compressible)"
+      - name: Compress binary with gzexe
+        run: gzexe ${{ matrix.artifact }} && rm ${{ matrix.artifact }}~
 
       - name: Upload to GitHub release
         uses: softprops/action-gh-release@v2
