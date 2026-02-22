@@ -81,7 +81,7 @@ function MultilineMessageView({
 }
 
 function ReplyPreview({ replyMessage, offset }: { replyMessage: Message; offset: number }) {
-  const raw = stripIrcFormatting(replyMessage.content)
+  const raw = stripIrcFormatting(replyMessage.content).split('\n')[0]
   const preview = raw.length > 50 ? raw.slice(0, 50) + '…' : raw
   return (
     <box paddingLeft={offset}>
