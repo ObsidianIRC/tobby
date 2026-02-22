@@ -8,14 +8,10 @@ interface StatusBarProps {
 
 export function StatusBar({ width }: StatusBarProps) {
   const currentServerId = useStore((state) => state.currentServerId)
-  const currentChannelId = useStore((state) => state.currentChannelId)
   const servers = useStore((state) => state.servers)
   const expandMultilines = useStore((state) => state.expandMultilines)
 
   const currentServer = servers.find((s) => s.id === currentServerId)
-  const currentChannel = currentServer?.channels.find((c) => c.id === currentChannelId)
-  const currentPrivateChat = currentServer?.privateChats.find((pc) => pc.id === currentChannelId)
-
   const getConnectionStatus = () => {
     if (!currentServer) return ''
 
@@ -64,27 +60,7 @@ export function StatusBar({ width }: StatusBarProps) {
             </text>
           </>
         )}
-
-        {currentChannel && (
-          <>
-            <text fg={THEME.borderSubtle}>│</text>
-            <text>
-              <span fg={THEME.accentPurple}># </span>
-              <span fg={THEME.foreground}>{currentChannel.name}</span>
-            </text>
-          </>
-        )}
-        {!currentChannel && currentPrivateChat && (
-          <>
-            <text fg={THEME.borderSubtle}>│</text>
-            <text>
-              <span fg={THEME.accentPink}>@ </span>
-              <span fg={THEME.foreground}>{currentPrivateChat.username}</span>
-            </text>
-          </>
-        )}
       </box>
-
       <box flexDirection="row" gap={2}>
         {expandMultilines && (
           <text>
