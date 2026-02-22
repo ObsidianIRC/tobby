@@ -4,6 +4,8 @@
 [submodule "aur/tobby"]
 	path = aur/tobby
 	url = ssh://aur@aur.archlinux.org/tobby.git
+	active = false
 [submodule "aur/tobby-bin"]
 	path = aur/tobby-bin
 	url = ssh://aur@aur.archlinux.org/tobby-bin.git
+	active = false

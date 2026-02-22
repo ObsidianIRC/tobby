@@ -7,21 +7,18 @@
 ## Install
 
 ```sh
+# Arch Linux (no dependencies):
+yay -S tobby-bin
+
+# npm (requires Bun):
 npm install -g @mattfillipe/tobby
 
-# or run without installing:
+# or run without installing (requires Bun):
 npx @mattfillipe/tobby
 
-# or use without running
+# or just connect directly:
 ssh h4ks.com
-
-# In archlinux
-yay -S tobby
-# or
-yay -S tobby-bin
 ```
-
-> Requires [Bun](https://bun.sh/docs/installation) to be installed.
 
 ## Quickstart
 
@@ -87,10 +84,9 @@ To react, reply hit `Ctrl+Space` to enter message selection mode, navigate to th
 ## Development
 
 ```sh
-git clone --recurse-submodules https://github.com/ObsidianIRC/tobby
+git clone https://github.com/ObsidianIRC/tobby
 cd tobby
-# if you already cloned without --recurse-submodules:
-git submodule update --init
+git submodule update --init ObsidianIRC
 bun install
 bun run dev
 ```
@@ -110,8 +106,8 @@ bun run prepare
 Build distributable:
 
 ```sh
-bun run build   # outputs dist/index.js
+bun run build   # outputs dist/index.js (minified)
 
 # install locally:
-npm install -g .  # or npm link
+npm install -g .
 ```
