@@ -6,6 +6,7 @@ import os from 'node:os'
 import { resolveDatabasePath } from './utils/paths'
 import { setDatabasePath } from './services/database'
 import { bootstrapServer } from './utils/bootstrapServer'
+import { setRestrictions } from './utils/restrictions'
 
 declare global {
   var __APP_VERSION__: string
@@ -118,6 +119,14 @@ Options:
                      (matched by host+port, or any server when --server is
                      omitted) is already saved in the database.
 
+  --restrict-server <host>
+                     Only allow connecting to the given hostname. Any attempt
+                     to connect to a different server (via dialog or /connect)
+                     will be rejected with an error.
+  --restrict-user <nick>
+                     Only allow using the given nickname. Trailing underscores
+                     are permitted (server may append them on collision).
+
   --debug            Write a debug log to tobby-debug.log.
   --help, -h         Show this help and exit.
 
@@ -143,6 +152,8 @@ interface ParsedArgs {
   debug: boolean
   setup: boolean
   setupIfNotConfigured: boolean
+  restrictServer?: string
+  restrictUser?: string
 }
 
 function parseArgs(args: string[]): ParsedArgs {
@@ -182,6 +193,12 @@ function parseArgs(args: string[]): ParsedArgs {
       case '--setup-if-not-configured':
         result.setupIfNotConfigured = true
         break
+      case '--restrict-server':
+        result.restrictServer = args[++i]
+        break
+      case '--restrict-user':
+        result.restrictUser = args[++i]
+        break
     }
   }
   return result
@@ -204,6 +221,10 @@ if (parsed.debug) {
 } else {
   globalThis.debugLog = undefined
 }
+
+// ── Connection restrictions ───────────────────────────────────────────────────
+
+setRestrictions({ server: parsed.restrictServer, nick: parsed.restrictUser })
 
 // ── Database path ─────────────────────────────────────────────────────────────
 

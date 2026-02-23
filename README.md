@@ -16,7 +16,7 @@ npm install -g @mattfillipe/tobby
 # or run without installing (requires Bun):
 npx @mattfillipe/tobby
 
-# or just connect directly:
+# or just run without running
 ssh h4ks.com
 ```
 

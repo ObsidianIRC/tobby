@@ -3,6 +3,7 @@ import type { AppStore } from '@/store'
 import type { ActionRegistry } from '@/actions'
 import { v4 as uuidv4 } from 'uuid'
 import { noAutoReconnectServers } from '@/store/slices/ircSlice'
+import { checkServerRestriction, checkNickRestriction } from '@/utils/restrictions'
 import { getDatabase } from '@/services/database'
 import { deterministicChannelId } from '@/utils/bootstrapServer'
 import type { Channel } from '@/types'
@@ -63,6 +64,12 @@ export function registerServerActions(registry: ActionRegistry<AppStore>) {
       if (!ircClient) {
         throw new Error('IRC client not initialized')
       }
+
+      const serverErr = checkServerRestriction(params.host)
+      if (serverErr) throw new Error(serverErr)
+
+      const nickErr = checkNickRestriction(params.nickname)
+      if (nickErr) throw new Error(nickErr)
 
       const serverId = uuidv4()
 

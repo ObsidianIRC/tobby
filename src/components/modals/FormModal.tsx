@@ -11,6 +11,8 @@ export interface FormField {
   placeholder?: string
   defaultValue?: string
   secret?: boolean
+  /** When true the field is displayed as fixed text and excluded from Tab/Enter navigation */
+  readOnly?: boolean
 }
 
 interface FormModalProps {
@@ -21,6 +23,26 @@ interface FormModalProps {
   onSubmit: (values: Record<string, string>) => void
   onCancel: () => void
   submitLabel?: string
+  error?: string
+}
+
+const firstEditable = (fields: FormField[]) => {
+  const idx = fields.findIndex((f) => !f.readOnly)
+  return idx === -1 ? 0 : idx
+}
+
+const nextEditable = (fields: FormField[], from: number): number => {
+  for (let i = from + 1; i < fields.length; i++) {
+    if (!fields[i]!.readOnly) return i
+  }
+  return -1
+}
+
+const prevEditable = (fields: FormField[], from: number): number => {
+  for (let i = from - 1; i >= 0; i--) {
+    if (!fields[i]!.readOnly) return i
+  }
+  return -1
 }
 
 export function FormModal({
@@ -31,6 +53,7 @@ export function FormModal({
   onSubmit,
   onCancel,
   submitLabel = 'Submit',
+  error,
 }: FormModalProps) {
   const [values, setValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {}
@@ -42,10 +65,11 @@ export function FormModal({
   const [secretValues, setSecretValues] = useState<Record<string, string>>({})
   // Refs for secret <input> elements — allows setText() without re-triggering onInput
   const secretRefs = useRef<Map<string, InputRenderable>>(new Map())
-  const [focusedField, setFocusedField] = useState(0)
+  const [focusedField, setFocusedField] = useState(() => firstEditable(fields))
 
   const modalWidth = Math.min(55, width - 4)
-  const modalHeight = Math.min(4 + fields.length * 3 + 2, height - 4)
+  const errorOffset = error ? 1 : 0
+  const modalHeight = Math.min(4 + fields.length * 3 + 2 + errorOffset, height - 4)
 
   useKeyboard((key) => {
     if (key.name === 'escape') {
@@ -56,17 +80,20 @@ export function FormModal({
     if (key.name === 'tab') {
       key.preventDefault()
       if (key.shift) {
-        setFocusedField((prev) => (prev - 1 + fields.length) % fields.length)
+        const prev = prevEditable(fields, focusedField)
+        if (prev !== -1) setFocusedField(prev)
       } else {
-        setFocusedField((prev) => (prev + 1) % fields.length)
+        const next = nextEditable(fields, focusedField)
+        if (next !== -1) setFocusedField(next)
       }
       return
     }
   })
 
   const handleFieldSubmit = () => {
-    if (focusedField < fields.length - 1) {
-      setFocusedField((prev) => prev + 1)
+    const next = nextEditable(fields, focusedField)
+    if (next !== -1) {
+      setFocusedField(next)
     } else {
       const merged = { ...values }
       for (const field of fields) {
@@ -97,20 +124,27 @@ export function FormModal({
   }
 
   const footer = (
-    <box
-      paddingLeft={2}
-      paddingRight={2}
-      height={1}
-      backgroundColor={THEME.backgroundElement}
-      justifyContent="space-between"
-      flexDirection="row"
-    >
-      <text fg={THEME.mutedText}>
-        <span fg={THEME.accent}>Tab</span> Next <span fg={THEME.accent}>Enter</span> {submitLabel}
-      </text>
-      <text fg={THEME.mutedText}>
-        <span fg={THEME.accent}>Esc</span> Cancel
-      </text>
+    <box flexDirection="column">
+      {error && (
+        <box height={1} paddingLeft={2} paddingRight={2} backgroundColor={THEME.backgroundElement}>
+          <text fg={THEME.error}>⚠ {error}</text>
+        </box>
+      )}
+      <box
+        paddingLeft={2}
+        paddingRight={2}
+        height={1}
+        backgroundColor={THEME.backgroundElement}
+        justifyContent="space-between"
+        flexDirection="row"
+      >
+        <text fg={THEME.mutedText}>
+          <span fg={THEME.accent}>Tab</span> Next <span fg={THEME.accent}>Enter</span> {submitLabel}
+        </text>
+        <text fg={THEME.mutedText}>
+          <span fg={THEME.accent}>Esc</span> Cancel
+        </text>
+      </box>
     </box>
   )
 
@@ -123,13 +157,22 @@ export function FormModal({
       title={title}
       footer={footer}
     >
-      <scrollbox height={modalHeight - 4} paddingLeft={2} paddingRight={2} paddingTop={1}>
+      <scrollbox
+        height={modalHeight - 4 - errorOffset}
+        paddingLeft={2}
+        paddingRight={2}
+        paddingTop={1}
+      >
         {fields.map((field, index) => (
           <box key={field.key} flexDirection="column" marginBottom={1}>
             <text>
-              <span fg={THEME.foreground}>{field.label}:</span>
+              <span fg={field.readOnly ? THEME.dimText : THEME.foreground}>{field.label}:</span>
             </text>
-            {field.secret ? (
+            {field.readOnly ? (
+              <box width={modalWidth - 6} height={1} backgroundColor={THEME.backgroundElement}>
+                <text fg={THEME.mutedText}>{values[field.key]}</text>
+              </box>
+            ) : field.secret ? (
               <input
                 ref={(el: InputRenderable | null) => {
                   if (el) secretRefs.current.set(field.key, el)

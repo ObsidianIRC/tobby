@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid'
+import { checkServerRestriction, checkNickRestriction } from '@/utils/restrictions'
 import type { ActionRegistry } from '@/actions'
 import type { ActionContext } from '@/types'
 import type { AppStore } from '@/store'
@@ -124,6 +125,12 @@ export class CommandParser {
       maxArgs: 3,
       execute: async (args, ctx) => {
         const [host, port = '6667', nickname] = args
+        const serverErr = checkServerRestriction(host!)
+        if (serverErr) return { success: false, message: serverErr }
+        if (nickname) {
+          const nickErr = checkNickRestriction(nickname)
+          if (nickErr) return { success: false, message: nickErr }
+        }
         await this.registry.execute('server.connectWith', ctx, {
           name: host,
           host,
@@ -274,6 +281,8 @@ export class CommandParser {
         if (!ctx.currentServer || !ctx.ircClient) {
           return { success: false, message: 'Not connected to a server' }
         }
+        const nickErr = checkNickRestriction(newNick!)
+        if (nickErr) return { success: false, message: nickErr }
         ctx.ircClient.sendRaw(ctx.currentServer.id, `NICK ${newNick}`)
         return { success: true, message: `Changing nick to ${newNick}...` }
       },
