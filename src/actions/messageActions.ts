@@ -2,6 +2,7 @@ import type { ActionContext, Message } from '@/types'
 import type { AppStore } from '@/store'
 import type { ActionRegistry } from '@/actions'
 import { v4 as uuidv4 } from 'uuid'
+import { sendSafeMessage, MAX_IRC_MSG_LENGTH } from '@/utils/ircSend'
 
 export function registerMessageActions(registry: ActionRegistry<AppStore>) {
   // Send message
@@ -50,10 +51,20 @@ export function registerMessageActions(registry: ActionRegistry<AppStore>) {
       const replyTag = replyingTo?.msgid ? `@+draft/reply=${replyingTo.msgid} ` : ''
 
       if (privateChat) {
-        ircClient.sendRaw(
-          currentServer.id,
-          `${replyTag}PRIVMSG ${privateChat.username} :${content}`
-        )
+        if (!replyTag && content.length > MAX_IRC_MSG_LENGTH) {
+          sendSafeMessage(
+            ircClient,
+            currentServer.id,
+            privateChat.username,
+            content,
+            currentServer.capabilities ?? []
+          )
+        } else {
+          ircClient.sendRaw(
+            currentServer.id,
+            `${replyTag}PRIVMSG ${privateChat.username} :${content}`
+          )
+        }
         debugLog?.('Sent private message to', privateChat.username, 'with content:', content)
         // Server will echo the message back via USERMSG if echo-message is active
         if (!hasEchoMessage) {
@@ -80,7 +91,17 @@ export function registerMessageActions(registry: ActionRegistry<AppStore>) {
 
       if (replyTag) {
         ircClient.sendRaw(currentServer.id, `${replyTag}PRIVMSG ${currentChannel.name} :${content}`)
+      } else if (!content.includes('\n') && content.length > MAX_IRC_MSG_LENGTH) {
+        // Single-line paste that exceeds the IRC limit: split safely
+        sendSafeMessage(
+          ircClient,
+          currentServer.id,
+          currentChannel.name,
+          content,
+          currentServer.capabilities ?? []
+        )
       } else {
+        // Normal path: sendMessage handles \n-based multiline internally
         ircClient.sendMessage(currentServer.id, currentChannel.id, content)
       }
 
