@@ -10,6 +10,7 @@ export function StatusBar({ width }: StatusBarProps) {
   const currentServerId = useStore((state) => state.currentServerId)
   const servers = useStore((state) => state.servers)
   const expandMultilines = useStore((state) => state.expandMultilines)
+  const messageSearch = useStore((state) => state.messageSearch)
 
   const currentServer = servers.find((s) => s.id === currentServerId)
   const getConnectionStatus = () => {
@@ -62,6 +63,13 @@ export function StatusBar({ width }: StatusBarProps) {
         )}
       </box>
       <box flexDirection="row" gap={2}>
+        {messageSearch !== null && messageSearch.matchIds.length > 0 && (
+          <text>
+            <span fg={THEME.accentCyan}>
+              {messageSearch.currentIndex + 1} / {messageSearch.matchIds.length}
+            </span>
+          </text>
+        )}
         {expandMultilines && (
           <text>
             <span fg={THEME.accentYellow}>≡ ml</span>

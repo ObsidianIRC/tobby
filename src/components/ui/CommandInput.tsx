@@ -8,7 +8,7 @@ import { useTypingIndicator } from '../../hooks/useTypingIndicator'
 import { useTabCompletion } from '../../hooks/useTabCompletion'
 import { copyToClipboard } from '../../utils/clipboard'
 import { stripIrcFormatting } from '../../utils/ircFormatting'
-import { registerInputRef } from '../../utils/inputFocus'
+import { registerInputRef, focusInput } from '../../utils/inputFocus'
 import { THEME, COLORS } from '../../constants/theme'
 import type { Message } from '../../types'
 
@@ -74,6 +74,8 @@ export function CommandInput({ width }: CommandInputProps) {
   const setReplyingTo = useStore((state) => state.setReplyingTo)
   const openModal = useStore((state) => state.openModal)
   const quitWarning = useStore((state) => state.quitWarning)
+  const messageSearch = useStore((state) => state.messageSearch)
+  const setMessageSearch = useStore((state) => state.setMessageSearch)
 
   const currentServer = servers.find((s) => s.id === currentServerId)
   const currentChannel = currentServer?.channels.find((c) => c.id === currentChannelId)
@@ -90,10 +92,15 @@ export function CommandInput({ width }: CommandInputProps) {
 
   const { handleTabCompletion, resetCompletion } = useTabCompletion()
 
-  const selectableMessages = useMemo(() => {
-    const msgs = currentChannelId ? (messages.get(currentChannelId) ?? []) : []
-    return msgs.filter((m) => SELECTABLE_TYPES.includes(m.type))
-  }, [messages, currentChannelId])
+  const channelMessages = useMemo(
+    () => (currentChannelId ? (messages.get(currentChannelId) ?? []) : []),
+    [messages, currentChannelId]
+  )
+
+  const selectableMessages = useMemo(
+    () => channelMessages.filter((m) => SELECTABLE_TYPES.includes(m.type)),
+    [channelMessages]
+  )
 
   const getPrompt = () => {
     if (currentChannel) return `[${currentChannel.name}] > `
@@ -210,8 +217,13 @@ export function CommandInput({ width }: CommandInputProps) {
       return
     }
 
-    // Ctrl+Space toggles selection mode
+    // Ctrl+Space toggles selection mode; also closes search if open
     if (key.ctrl && key.name === 'space' && !activeModal) {
+      if (messageSearch !== null) {
+        setMessageSearch(null)
+        setSelectedMessage(null)
+        return
+      }
       if (selectedMessage) {
         setSelectedMessage(null)
         return
@@ -223,7 +235,64 @@ export function CommandInput({ width }: CommandInputProps) {
       }
     }
 
-    if (selectedMessage && !activeModal) {
+    // Search mode: Esc always exits. Enter unfocuses the input (typing → false).
+    // n/p/shortcuts only work when input is not focused (!typing).
+    // When typing, all other keys fall through to SearchBar's focused <input>.
+    if (messageSearch !== null && !activeModal) {
+      if (key.name === 'escape') {
+        key.preventDefault()
+        setMessageSearch(null)
+        setSelectedMessage(null)
+        return
+      }
+      if (key.name === 'return' && messageSearch.typing) {
+        key.preventDefault()
+        setMessageSearch({ ...messageSearch, typing: false })
+        return
+      }
+      if (!messageSearch.typing) {
+        if (key.name === '/') {
+          key.preventDefault()
+          setMessageSearch({ ...messageSearch, typing: true })
+          return
+        }
+        if (key.name === 'p') {
+          key.preventDefault()
+          const older = messageSearch.currentIndex + 1
+          if (older < messageSearch.matchIds.length) {
+            const msg = channelMessages.find((m) => m.id === messageSearch.matchIds[older])
+            if (msg) {
+              setMessageSearch({ ...messageSearch, currentIndex: older })
+              setSelectedMessage(msg)
+            }
+          }
+          return
+        }
+        if (key.name === 'n') {
+          key.preventDefault()
+          const newer = messageSearch.currentIndex - 1
+          if (newer >= 0) {
+            const msg = channelMessages.find((m) => m.id === messageSearch.matchIds[newer])
+            if (msg) {
+              setMessageSearch({ ...messageSearch, currentIndex: newer })
+              setSelectedMessage(msg)
+            }
+          }
+          return
+        }
+        // Other keys when not typing fall through to the selection block (r/y/e/j/k etc.)
+      }
+      // When typing, all remaining keys fall through to SearchBar's focused <input>
+    }
+
+    // Selection block fires when: no search, OR search exists but input is not focused
+    if (selectedMessage && !activeModal && !messageSearch?.typing) {
+      if (key.name === '/' && !messageSearch) {
+        key.preventDefault()
+        setMessageSearch({ query: '', matchIds: [], currentIndex: 0, typing: true })
+        return
+      }
+
       const idx = selectableMessages.findIndex((m) => m.id === selectedMessage.id)
 
       if (key.name === 'k' || key.name === 'up') {
@@ -262,6 +331,7 @@ export function CommandInput({ width }: CommandInputProps) {
       if (key.name === 'r') {
         setReplyingTo(selectedMessage)
         setSelectedMessage(null)
+        focusInput()
         return
       }
 
@@ -375,7 +445,7 @@ export function CommandInput({ width }: CommandInputProps) {
   const prompt = getPrompt()
   const promptWidth = prompt.length
   const visibleLines = Math.min(inputLineCount, 5)
-  const isFocused = !activeModal && !selectedMessage
+  const isFocused = !activeModal && !selectedMessage && !messageSearch
 
   return (
     <box

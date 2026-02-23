@@ -9,6 +9,7 @@ import { getNicknameColor } from '../../utils/nickColors'
 import { copyToClipboard } from '../../utils/clipboard'
 import { focusInput } from '../../utils/inputFocus'
 import type { Message } from '../../types'
+import { SearchBar } from '../ui/SearchBar'
 
 const SELECTABLE_TYPES: Message['type'][] = ['message', 'action']
 
@@ -35,23 +36,43 @@ function wordWrap(text: string, maxWidth: number): string[] {
   return lines.length > 0 ? lines : [text]
 }
 
+// Renders plain text with the first occurrence of `query` highlighted in gold.
+function InlineHighlight({ text, query, baseFg }: { text: string; query: string; baseFg: string }) {
+  const lower = text.toLowerCase()
+  const idx = lower.indexOf(query.toLowerCase())
+  if (idx === -1) return <span fg={baseFg}>{text}</span>
+  const before = text.slice(0, idx)
+  const match = text.slice(idx, idx + query.length)
+  const after = text.slice(idx + query.length)
+  return (
+    <>
+      {before && <span fg={baseFg}>{before}</span>}
+      <span fg={COLORS.gold}>{match}</span>
+      {after && <span fg={baseFg}>{after}</span>}
+    </>
+  )
+}
+
 function MultilineMessageView({
   msg,
   username,
   timestamp,
   offset,
   isSelected,
+  highlightQuery,
 }: {
   msg: Message
   username: string
   timestamp: string
   offset: number
   isSelected: boolean
+  highlightQuery?: string
 }) {
   const lines = msg.lines ?? msg.content.split('\n')
   const nicknameColor = getNicknameColor(username)
   const visibleLines = isSelected ? lines : lines.slice(0, 2)
   const hiddenCount = lines.length - 2
+  const firstLine = visibleLines[0] ?? ''
 
   return (
     <box flexDirection="column">
@@ -59,7 +80,11 @@ function MultilineMessageView({
         <span fg={THEME.dimText}>[{timestamp}]</span>
         <span fg={nicknameColor}> {username}</span>
         <span fg={THEME.mutedText}> › </span>
-        <span fg={THEME.foreground}>{visibleLines[0] ?? ''}</span>
+        {highlightQuery ? (
+          <InlineHighlight text={firstLine} query={highlightQuery} baseFg={THEME.foreground} />
+        ) : (
+          <span fg={THEME.foreground}>{firstLine}</span>
+        )}
       </text>
       {visibleLines.slice(1).map((line, i) => (
         <text key={i}>
@@ -81,7 +106,7 @@ function MultilineMessageView({
 }
 
 function ReplyPreview({ replyMessage, offset }: { replyMessage: Message; offset: number }) {
-  const raw = stripIrcFormatting(replyMessage.content).split('\n')[0]
+  const raw = stripIrcFormatting(replyMessage.content).split('\n')[0] ?? ''
   const preview = raw.length > 50 ? raw.slice(0, 50) + '…' : raw
   return (
     <box paddingLeft={offset}>
@@ -136,6 +161,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
   const setReplyingTo = useStore((state) => state.setReplyingTo)
   const openModal = useStore((state) => state.openModal)
   const expandMultilines = useStore((state) => state.expandMultilines)
+  const messageSearch = useStore((state) => state.messageSearch)
 
   const scrollBoxRef = useRef<ScrollBoxRenderable | null>(null)
 
@@ -153,7 +179,8 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
 
   const channelHeaderHeight = activeView || isServerView ? 2 : 0
   const topicHeight = currentChannel?.topic ? 2 : 0
-  const messagesHeight = height - channelHeaderHeight - topicHeight
+  const searchBarHeight = messageSearch !== null ? 1 : 0
+  const messagesHeight = height - channelHeaderHeight - topicHeight - searchBarHeight
 
   // Keep refs current so the effect doesn't need them in its dep array
   const allMessagesRef = useRef(allMessages)
@@ -282,22 +309,32 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
   // but for a terminal app the re-render cost is negligible
   const channelUsernames = currentChannel?.users.map((u) => u.username) ?? []
 
-  const renderMessage = (msg: Message) => {
+  const renderMessage = (msg: Message, highlightQuery?: string) => {
     const { timestamp, username } = formatMessage(msg)
     const nicknameColor = getNicknameColor(username)
 
     switch (msg.type) {
       case 'message': {
         const offset = contentOffset(username)
-        const lines = wordWrap(stripIrcFormatting(msg.content), contentWidth(username))
+        const plainContent = stripIrcFormatting(msg.content)
+        const lines = wordWrap(plainContent, contentWidth(username))
         if (lines.length > 1) {
+          const firstLine = lines[0] ?? ''
           return (
             <box flexDirection="column">
               <text>
                 <span fg={THEME.dimText}>[{timestamp}]</span>
                 <span fg={nicknameColor}> {username}</span>
                 <span fg={THEME.mutedText}> › </span>
-                <span fg={THEME.foreground}>{lines[0]}</span>
+                {highlightQuery ? (
+                  <InlineHighlight
+                    text={firstLine}
+                    query={highlightQuery}
+                    baseFg={THEME.foreground}
+                  />
+                ) : (
+                  <span fg={THEME.foreground}>{firstLine}</span>
+                )}
               </text>
               {lines.slice(1).map((line, i) => (
                 <text key={i}>
@@ -315,24 +352,40 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
             <span fg={THEME.dimText}>[{timestamp}]</span>
             <span fg={nicknameColor}> {username}</span>
             <span fg={THEME.mutedText}> › </span>
-            <span fg={THEME.foreground}>
-              {renderIrcText(msg.content, msg.id, currentServer?.nickname, channelUsernames)}
-            </span>
+            {highlightQuery ? (
+              <InlineHighlight
+                text={plainContent}
+                query={highlightQuery}
+                baseFg={THEME.foreground}
+              />
+            ) : (
+              <span fg={THEME.foreground}>
+                {renderIrcText(msg.content, msg.id, currentServer?.nickname, channelUsernames)}
+              </span>
+            )}
           </text>
         )
       }
       case 'action': {
         const offset = contentOffset(username)
-        const lines = wordWrap(stripIrcFormatting(msg.content), contentWidth(username))
+        const plainContent = stripIrcFormatting(msg.content)
+        const lines = wordWrap(plainContent, contentWidth(username))
         if (lines.length > 1) {
+          const firstLine = lines[0] ?? ''
           return (
             <box flexDirection="column">
               <text>
                 <span fg={THEME.dimText}>[{timestamp}]</span>
-                <span fg={COLORS.magenta}>
-                  {' '}
-                  * {username} {lines[0]}
-                </span>
+                <span fg={COLORS.magenta}> * {username} </span>
+                {highlightQuery ? (
+                  <InlineHighlight
+                    text={firstLine}
+                    query={highlightQuery}
+                    baseFg={COLORS.magenta}
+                  />
+                ) : (
+                  <span fg={COLORS.magenta}>{firstLine}</span>
+                )}
               </text>
               {lines.slice(1).map((line, i) => (
                 <text key={i}>
@@ -348,11 +401,14 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
         return (
           <text>
             <span fg={THEME.dimText}>[{timestamp}]</span>
-            <span fg={COLORS.magenta}> * {username}</span>
-            <span fg={COLORS.magenta}>
-              {' '}
-              {renderIrcText(msg.content, msg.id, currentServer?.nickname, channelUsernames)}
-            </span>
+            <span fg={COLORS.magenta}> * {username} </span>
+            {highlightQuery ? (
+              <InlineHighlight text={plainContent} query={highlightQuery} baseFg={COLORS.magenta} />
+            ) : (
+              <span fg={COLORS.magenta}>
+                {renderIrcText(msg.content, msg.id, currentServer?.nickname, channelUsernames)}
+              </span>
+            )}
           </text>
         )
       }
@@ -519,6 +575,8 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
         </box>
       )}
 
+      {messageSearch !== null && <SearchBar width={width} />}
+
       <scrollbox
         ref={scrollBoxRef as React.RefObject<ScrollBoxRenderable>}
         height={messagesHeight}
@@ -541,12 +599,23 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
           const isSelectable = SELECTABLE_TYPES.includes(msg.type)
           const { username } = formatMessage(msg)
           const offset = contentOffset(username)
+          const isSearchMatch = messageSearch?.matchIds.includes(msg.id) ?? false
+          const isCurrentMatch =
+            messageSearch !== null && messageSearch.matchIds[messageSearch.currentIndex] === msg.id
           return (
             <box
               key={msg.id}
               paddingLeft={1}
               paddingRight={1}
-              backgroundColor={isSelected ? THEME.selectedBackground : undefined}
+              backgroundColor={
+                isCurrentMatch
+                  ? '#4d3800'
+                  : isSelected
+                    ? THEME.selectedBackground
+                    : isSearchMatch
+                      ? '#2a2000'
+                      : undefined
+              }
               onMouseDown={isSelectable ? () => setSelectedMessage(msg) : undefined}
             >
               {msg.replyMessage && <ReplyPreview replyMessage={msg.replyMessage} offset={offset} />}
@@ -557,9 +626,10 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
                   timestamp={formatTimestamp(msg.timestamp)}
                   offset={offset}
                   isSelected={isSelected || expandMultilines}
+                  highlightQuery={isSearchMatch ? (messageSearch?.query ?? undefined) : undefined}
                 />
               ) : (
-                renderMessage(msg)
+                renderMessage(msg, isSearchMatch ? (messageSearch?.query ?? undefined) : undefined)
               )}
               {isSelected && (
                 <box paddingLeft={offset} flexDirection="row">

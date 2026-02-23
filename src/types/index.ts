@@ -133,6 +133,7 @@ export interface UIState {
   inputLineCount: number
   expandMultilines: boolean
   modalError: string | null
+  messageSearch: { query: string; matchIds: string[]; currentIndex: number; typing: boolean } | null
 }
 
 export interface Settings {

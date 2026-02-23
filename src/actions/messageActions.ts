@@ -324,6 +324,29 @@ export function registerMessageActions(registry: ActionRegistry<AppStore>) {
     },
   })
 
+  // Search messages in the current channel buffer
+  registry.register({
+    id: 'message.search',
+    label: 'Search messages',
+    description: 'Search in current channel buffer',
+    category: 'message',
+    keywords: ['search', 'find', 'grep', '/'],
+    priority: 80,
+
+    isVisible: (ctx) => !!ctx.store.currentChannelId,
+
+    execute: (ctx) => {
+      const state = ctx.store
+      if (!state.selectedMessage) {
+        const msgs = state.messages.get(state.currentChannelId ?? '') ?? []
+        const last = msgs.filter((m) => ['message', 'action'].includes(m.type)).at(-1)
+        if (last) state.setSelectedMessage(last)
+      }
+      state.setMessageSearch({ query: '', matchIds: [], currentIndex: 0, typing: true })
+      state.closeModal()
+    },
+  })
+
   // Show typing indicator
   registry.register({
     id: 'message.typing',
