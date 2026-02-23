@@ -69,6 +69,11 @@ export class CommandParser {
           '  • /away [message]                Set/clear away',
           '  • /quit [reason]                 Quit',
           '  • /disconnect                    Disconnect and remove current server',
+          '  • /mode [#chan] [+/-modes] [args] Set channel/user modes',
+          '  • /op <nick> [nick ...]          Give operator status',
+          '  • /deop <nick> [nick ...]        Remove operator status',
+          '  • /voice <nick> [nick ...]       Give voice',
+          '  • /devoice <nick> [nick ...]     Remove voice',
           '  • /quote <raw line>              Send raw IRC line to server',
           '',
           'SHORTCUTS:',
@@ -410,6 +415,137 @@ export class CommandParser {
         }
         ctx.ircClient.sendRaw(ctx.currentServer.id, 'AWAY')
         return { success: true, message: 'Marked as back' }
+      },
+    })
+
+    this.register({
+      name: 'mode',
+      aliases: [],
+      description: 'Set or query channel/user modes',
+      usage: '/mode [#channel] [+/-modes] [args...]',
+      minArgs: 0,
+      execute: async (args, ctx) => {
+        if (!ctx.currentServer || !ctx.ircClient) {
+          return { success: false, message: 'Not connected to a server' }
+        }
+
+        // /mode with no args — query current channel modes
+        if (args.length === 0) {
+          if (!ctx.currentChannel) {
+            return { success: false, message: 'No active channel' }
+          }
+          ctx.ircClient.sendRaw(ctx.currentServer.id, `MODE ${ctx.currentChannel.name}`)
+          return { success: true }
+        }
+
+        // /mode #channel ... — explicit target; otherwise default to current channel
+        let target: string
+        let modeArgs: string[]
+        if (args[0]!.startsWith('#') || args[0]!.startsWith('&')) {
+          target = args[0]!
+          modeArgs = args.slice(1)
+        } else {
+          if (!ctx.currentChannel) {
+            return { success: false, message: 'No active channel' }
+          }
+          target = ctx.currentChannel.name
+          modeArgs = args
+        }
+
+        if (modeArgs.length === 0) {
+          ctx.ircClient.sendRaw(ctx.currentServer.id, `MODE ${target}`)
+        } else {
+          ctx.ircClient.sendRaw(ctx.currentServer.id, `MODE ${target} ${modeArgs.join(' ')}`)
+        }
+        return { success: true }
+      },
+    })
+
+    this.register({
+      name: 'op',
+      aliases: [],
+      description: 'Give operator status to one or more users in the current channel',
+      usage: '/op <nick> [nick ...]',
+      minArgs: 1,
+      execute: async (args, ctx) => {
+        if (!ctx.currentServer || !ctx.ircClient) {
+          return { success: false, message: 'Not connected to a server' }
+        }
+        if (!ctx.currentChannel) {
+          return { success: false, message: 'No active channel' }
+        }
+        const modes = '+' + 'o'.repeat(args.length)
+        ctx.ircClient.sendRaw(
+          ctx.currentServer.id,
+          `MODE ${ctx.currentChannel.name} ${modes} ${args.join(' ')}`
+        )
+        return { success: true }
+      },
+    })
+
+    this.register({
+      name: 'deop',
+      aliases: [],
+      description: 'Remove operator status from one or more users in the current channel',
+      usage: '/deop <nick> [nick ...]',
+      minArgs: 1,
+      execute: async (args, ctx) => {
+        if (!ctx.currentServer || !ctx.ircClient) {
+          return { success: false, message: 'Not connected to a server' }
+        }
+        if (!ctx.currentChannel) {
+          return { success: false, message: 'No active channel' }
+        }
+        const modes = '-' + 'o'.repeat(args.length)
+        ctx.ircClient.sendRaw(
+          ctx.currentServer.id,
+          `MODE ${ctx.currentChannel.name} ${modes} ${args.join(' ')}`
+        )
+        return { success: true }
+      },
+    })
+
+    this.register({
+      name: 'voice',
+      aliases: [],
+      description: 'Give voice to one or more users in the current channel',
+      usage: '/voice <nick> [nick ...]',
+      minArgs: 1,
+      execute: async (args, ctx) => {
+        if (!ctx.currentServer || !ctx.ircClient) {
+          return { success: false, message: 'Not connected to a server' }
+        }
+        if (!ctx.currentChannel) {
+          return { success: false, message: 'No active channel' }
+        }
+        const modes = '+' + 'v'.repeat(args.length)
+        ctx.ircClient.sendRaw(
+          ctx.currentServer.id,
+          `MODE ${ctx.currentChannel.name} ${modes} ${args.join(' ')}`
+        )
+        return { success: true }
+      },
+    })
+
+    this.register({
+      name: 'devoice',
+      aliases: [],
+      description: 'Remove voice from one or more users in the current channel',
+      usage: '/devoice <nick> [nick ...]',
+      minArgs: 1,
+      execute: async (args, ctx) => {
+        if (!ctx.currentServer || !ctx.ircClient) {
+          return { success: false, message: 'Not connected to a server' }
+        }
+        if (!ctx.currentChannel) {
+          return { success: false, message: 'No active channel' }
+        }
+        const modes = '-' + 'v'.repeat(args.length)
+        ctx.ircClient.sendRaw(
+          ctx.currentServer.id,
+          `MODE ${ctx.currentChannel.name} ${modes} ${args.join(' ')}`
+        )
+        return { success: true }
       },
     })
 

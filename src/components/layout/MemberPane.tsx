@@ -32,65 +32,36 @@ export function MemberPane({ width, height, focused }: MemberPaneProps) {
   const currentServer = servers.find((s) => s.id === currentServerId)
   const currentChannel = currentServer?.channels.find((c) => c.id === currentChannelId)
 
-  const getUserModeSymbol = (user: User) => {
-    if (!user.modes || user.modes.length === 0) return ''
+  // IRC prefix symbols in privilege order (highest first)
+  const PREFIX_ORDER = ['~', '&', '@', '%', '+'] as const
+  type Prefix = (typeof PREFIX_ORDER)[number]
 
-    const mode = user.modes[0]
-    switch (mode) {
-      case 'o':
-        return '@'
-      case 'h':
-        return '%'
-      case 'v':
-        return '+'
-      case 'q':
-        return '~'
-      case 'a':
-        return '&'
-      default:
-        return ''
-    }
+  const PREFIX_COLOR: Record<Prefix, string> = {
+    '~': THEME.error, // Owner
+    '&': THEME.accentYellow, // Admin
+    '@': THEME.accentGreen, // Op
+    '%': THEME.accentCyan, // Half-op
+    '+': THEME.accentPurple, // Voice
   }
 
-  const getModeColor = (user: User) => {
-    if (!user.modes || user.modes.length === 0) return undefined
+  const getHighestPrefix = (user: User): Prefix | '' => {
+    const status = user.status ?? ''
+    return PREFIX_ORDER.find((p) => status.includes(p)) ?? ''
+  }
 
-    const mode = user.modes[0]
-    switch (mode) {
-      case 'q':
-        return THEME.error // Owner - red
-      case 'a':
-        return THEME.accentYellow // Admin - gold
-      case 'o':
-        return THEME.accentGreen // Op - green
-      case 'h':
-        return THEME.accentCyan // Half-op - cyan
-      case 'v':
-        return THEME.accentPurple // Voice - purple
-      default:
-        return undefined
-    }
+  const getUserModeSymbol = (user: User) => getHighestPrefix(user)
+
+  const getModeColor = (user: User) => {
+    const prefix = getHighestPrefix(user)
+    return prefix ? PREFIX_COLOR[prefix] : undefined
   }
 
   const sortUsers = (users: User[]) => {
     return [...users].sort((a, b) => {
       const getModeWeight = (user: User) => {
-        if (!user.modes || user.modes.length === 0) return 5
-        const mode = user.modes[0]
-        switch (mode) {
-          case 'q':
-            return 0
-          case 'a':
-            return 1
-          case 'o':
-            return 2
-          case 'h':
-            return 3
-          case 'v':
-            return 4
-          default:
-            return 5
-        }
+        const prefix = getHighestPrefix(user)
+        if (!prefix) return PREFIX_ORDER.length
+        return PREFIX_ORDER.indexOf(prefix)
       }
 
       const weightA = getModeWeight(a)

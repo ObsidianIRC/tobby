@@ -16,28 +16,6 @@ interface CommandInputProps {
   width: number
 }
 
-const COMMANDS = [
-  'help',
-  'connect',
-  'join',
-  'part',
-  'msg',
-  'me',
-  'topic',
-  'nick',
-  'quit',
-  'whois',
-  'names',
-  'away',
-  'history',
-  'whisper',
-  'clear',
-  'close',
-  'disconnect',
-  'query',
-  'quote',
-]
-
 const SELECTABLE_TYPES: Message['type'][] = ['message', 'action']
 
 export function CommandInput({ width }: CommandInputProps) {
@@ -376,7 +354,11 @@ export function CommandInput({ width }: CommandInputProps) {
       key.preventDefault()
       const users = currentChannel?.users ?? []
       const channels = currentServer?.channels ?? []
-      const result = handleTabCompletion(getText(), { users, channels, commands: COMMANDS })
+      const result = handleTabCompletion(getText(), {
+        users,
+        channels,
+        commands: commandParser.getCommandNames(),
+      })
       if (result) {
         loadText(result.newText)
         // setText doesn't fire onContentChange, so manually trigger a React re-render

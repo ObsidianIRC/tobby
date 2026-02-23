@@ -922,7 +922,7 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
 
     // Mode change
     ircClient.on('MODE', (data: EventMap['MODE']) => {
-      const { getServer, addMessage } = get()
+      const { getServer, addMessage, updateChannel } = get()
       const server = getServer(data.serverId)
       if (!server) return
 
@@ -945,6 +945,64 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
           mentioned: [],
         }
         addMessage(channel.id, message)
+
+        // Apply prefix mode changes to the user list.
+        // Prefix modes (q/a/o/h/v) each consume one nick argument.
+        // Other common modes that take arguments are listed in PARAM_MODES so we
+        // skip their arguments without treating them as nicks.
+        const PREFIX_MODES: Record<string, string> = {
+          q: '~',
+          a: '&',
+          o: '@',
+          h: '%',
+          v: '+',
+        }
+        // Non-prefix modes that take an argument on both + and -
+        const PARAM_MODES = new Set(['b', 'e', 'I', 'k', 'f'])
+        // Non-prefix modes that take an argument only on +
+        const PLUS_PARAM_MODES = new Set(['l', 'j', 'J'])
+
+        let adding = true
+        let argIndex = 0
+        const updatedUsers = channel.users.map((u) => ({ ...u }))
+        let changed = false
+
+        for (const char of data.modestring) {
+          if (char === '+') {
+            adding = true
+            continue
+          }
+          if (char === '-') {
+            adding = false
+            continue
+          }
+
+          const symbol = PREFIX_MODES[char]
+          if (symbol !== undefined) {
+            const nick = data.modeargs[argIndex++]
+            if (!nick) continue
+            const idx = updatedUsers.findIndex(
+              (u) => (u.nickname || u.username).toLowerCase() === nick.toLowerCase()
+            )
+            if (idx !== -1) {
+              const u = updatedUsers[idx]!
+              const cur = u.status ?? ''
+              if (adding && !cur.includes(symbol)) {
+                u.status = cur + symbol
+                changed = true
+              } else if (!adding && cur.includes(symbol)) {
+                u.status = cur.replace(symbol, '')
+                changed = true
+              }
+            }
+          } else if (PARAM_MODES.has(char) || (PLUS_PARAM_MODES.has(char) && adding)) {
+            argIndex++ // consume argument without using it
+          }
+        }
+
+        if (changed) {
+          updateChannel(data.serverId, channel.id, { users: updatedUsers })
+        }
       }
     })
 
