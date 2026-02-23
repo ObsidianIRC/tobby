@@ -35,4 +35,3 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 todo.*
 obbytty-debug.log
 tobby-debug.log
-bin
