@@ -38,7 +38,7 @@ macOS quarantines binaries downloaded from the internet. Clear it once:
 
 ```sh
 chmod +x tobby-aarch64-macos
-xattr -dr com.apple.quarantine tobby-aarch64-macos
+xattr -d com.apple.quarantine tobby-aarch64-macos
 ./tobby-aarch64-macos
 ```
 

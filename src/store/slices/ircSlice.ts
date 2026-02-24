@@ -228,10 +228,26 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       }
     )
 
-    // WHOIS responses — route to the currently active buffer so they're visible
+    // currentChannelId is global — it has no server affiliation. When the user is connected to
+    // multiple servers, using it as a routing target without this check would put messages from
+    // server B into whatever buffer happens to be open on server A.
+    const channelBelongsToServer = (serverId: string, channelId: string | null): boolean => {
+      if (!channelId) return false
+      if (channelId === serverId) return true
+      const srv = get().getServer(serverId)
+      if (!srv) return false
+      return (
+        srv.channels.some((c) => c.id === channelId) ||
+        srv.privateChats.some((pc) => pc.id === channelId)
+      )
+    }
+
+    // WHOIS responses go to whichever buffer the user is looking at, so they're immediately visible.
     const addWhoisLine = (serverId: string, text: string) => {
       const { addMessage } = get()
-      const targetId = get().currentChannelId ?? serverId
+      const currentChannelId = get().currentChannelId
+      const targetId =
+        (channelBelongsToServer(serverId, currentChannelId) ? currentChannelId : null) ?? serverId
       addMessage(targetId, {
         id: uuidv4(),
         type: 'system',
@@ -565,15 +581,26 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
 
     // NOTICE from a user/service (e.g. NickServ, ChanServ, or another user)
     ircClient.on('USERNOTICE', (data: EventMap['USERNOTICE']) => {
-      const { getServer, addMessage, currentChannelId } = get()
+      const { getServer, addMessage } = get()
       const server = getServer(data.serverId)
       if (!server) return
 
-      // Route to the sender's existing PM window if open, otherwise active buffer
+      // Server NOTICEs (e.g. ":irc.libera.chat NOTICE you :*** Checking Ident") have a hostname
+      // as the sender rather than a nick. ircClient.ts already routes those to the server buffer
+      // via serverMessage, so skip them here to avoid duplicates.
+      const isServerOrigin = data.sender.includes('.') && !data.sender.includes('!')
+      if (isServerOrigin) return
+
+      // Prefer the sender's open PM window; fall back to whichever buffer is active on this
+      // server, or the server buffer itself if the user is currently looking at another network.
       const existingPm = server.privateChats.find(
         (pc) => pc.username.toLowerCase() === data.sender.toLowerCase()
       )
-      const targetId = existingPm?.id ?? currentChannelId ?? data.serverId
+      const currentChannelId = get().currentChannelId
+      const targetId =
+        existingPm?.id ??
+        (channelBelongsToServer(data.serverId, currentChannelId) ? currentChannelId : null) ??
+        data.serverId
 
       addMessage(targetId, {
         id: uuidv4(),
