@@ -563,6 +563,57 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       }
     })
 
+    // NOTICE from a user/service (e.g. NickServ, ChanServ, or another user)
+    ircClient.on('USERNOTICE', (data: EventMap['USERNOTICE']) => {
+      const { getServer, addMessage, currentChannelId } = get()
+      const server = getServer(data.serverId)
+      if (!server) return
+
+      // Route to the sender's existing PM window if open, otherwise active buffer
+      const existingPm = server.privateChats.find(
+        (pc) => pc.username.toLowerCase() === data.sender.toLowerCase()
+      )
+      const targetId = existingPm?.id ?? currentChannelId ?? data.serverId
+
+      addMessage(targetId, {
+        id: uuidv4(),
+        type: 'notice',
+        content: stripIrcFormatting(data.message),
+        timestamp: data.timestamp,
+        userId: data.sender,
+        channelId: targetId,
+        serverId: data.serverId,
+        reactions: [],
+        replyMessage: null,
+        mentioned: [],
+      })
+    })
+
+    // NOTICE targeted at a channel
+    ircClient.on('CHANNNOTICE', (data: EventMap['CHANNNOTICE']) => {
+      const { getServer, addMessage } = get()
+      const server = getServer(data.serverId)
+      if (!server) return
+
+      const channel = server.channels.find(
+        (c) => c.name.toLowerCase() === data.channelName.toLowerCase()
+      )
+      if (!channel) return
+
+      addMessage(channel.id, {
+        id: uuidv4(),
+        type: 'notice',
+        content: stripIrcFormatting(data.message),
+        timestamp: data.timestamp,
+        userId: data.sender,
+        channelId: channel.id,
+        serverId: data.serverId,
+        reactions: [],
+        replyMessage: null,
+        mentioned: [],
+      })
+    })
+
     // User join
     ircClient.on('JOIN', (data: EventMap['JOIN']) => {
       const { getServer, updateChannel } = get()

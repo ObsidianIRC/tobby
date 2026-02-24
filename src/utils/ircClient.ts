@@ -158,7 +158,9 @@ export class IRCClient extends BaseIRCClient {
             text,
             raw: line,
           })
-        } else if (command === 'NOTICE' && !parts[2]?.startsWith('#')) {
+        } else if (command === 'NOTICE' && !parts[2]?.startsWith('#') && !parts[0]?.includes('!')) {
+          // Only route server-originated NOTICEs (source is a hostname, not nick!user@host)
+          // to serverMessage. User/service NOTICEs are handled via USERNOTICE event.
           const textStart = bare.indexOf(':', 1)
           const text = textStart !== -1 ? bare.slice(textStart + 1) : ''
           ;(this as any).triggerEvent('serverMessage', {

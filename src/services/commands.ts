@@ -59,8 +59,10 @@ export class CommandParser {
           '  • /connect <host> <port> <nick>  Connect to server',
           '  • /join #channel                 Join channel',
           '  • /part [#channel]               Leave channel',
-          '  • /msg <nick> <text>             Private message',
-          '  • /query <nick>                  Open PM window with user',
+          '  • /msg <target> <text>           Send message to nick or channel',
+          '  • /notice <target> <text>        Send a NOTICE to nick or channel',
+          '  • /ns /cs /os <cmd>              Shorthand for NickServ/ChanServ/OperServ',
+          '  • /query <nick> [text]           Open PM window (optionally send message)',
           '  • /nick <newnick>                Change nickname',
           '  • /topic [new topic]             Get/set topic',
           '  • /whois <nick>                  User info',
@@ -182,17 +184,159 @@ export class CommandParser {
 
     this.register({
       name: 'msg',
-      aliases: ['query', 'privmsg'],
-      description: 'Send a private message',
-      usage: '/msg <nick> <message>',
+      aliases: ['privmsg'],
+      description: 'Send a message to a nick or channel',
+      usage: '/msg <target> <message>',
       minArgs: 2,
       execute: async (args, ctx) => {
         const [target, ...messageParts] = args
         const message = messageParts.join(' ')
-        await this.registry.execute('message.send', ctx, message, target)
+        const { ircClient, currentServer } = ctx
+        if (!ircClient || !currentServer) {
+          return { success: false, message: 'Not connected to a server' }
+        }
+        ircClient.sendRaw(currentServer.id, `PRIVMSG ${target} :${message}`)
+        const hasEchoMessage = currentServer.capabilities?.includes('echo-message') ?? false
+        if (!hasEchoMessage) {
+          const isChannel = target.startsWith('#') || target.startsWith('&')
+          if (isChannel) {
+            const channel = currentServer.channels.find(
+              (c) => c.name.toLowerCase() === target.toLowerCase()
+            )
+            if (channel) {
+              ctx.store.addMessage(channel.id, {
+                id: uuidv4(),
+                type: 'message',
+                content: message,
+                timestamp: new Date(),
+                userId: currentServer.nickname,
+                channelId: channel.id,
+                serverId: currentServer.id,
+                reactions: [],
+                replyMessage: null,
+                mentioned: [],
+              })
+            }
+          } else {
+            let pm = currentServer.privateChats.find(
+              (pc) => pc.username.toLowerCase() === target.toLowerCase()
+            )
+            if (!pm) {
+              pm = {
+                id: uuidv4(),
+                username: target,
+                serverId: currentServer.id,
+                unreadCount: 0,
+                isMentioned: false,
+              }
+              ctx.store.addPrivateChat(currentServer.id, pm)
+            }
+            ctx.store.addMessage(pm.id, {
+              id: uuidv4(),
+              type: 'message',
+              content: message,
+              timestamp: new Date(),
+              userId: currentServer.nickname,
+              channelId: pm.id,
+              serverId: currentServer.id,
+              reactions: [],
+              replyMessage: null,
+              mentioned: [],
+            })
+          }
+        }
         return { success: true }
       },
     })
+
+    this.register({
+      name: 'query',
+      aliases: [],
+      description: 'Open a private chat window with a user',
+      usage: '/query <nick> [message]',
+      minArgs: 1,
+      execute: async (args, ctx) => {
+        const [nick, ...messageParts] = args
+        const { ircClient, currentServer } = ctx
+        if (!ircClient || !currentServer) {
+          return { success: false, message: 'Not connected to a server' }
+        }
+        let pm = currentServer.privateChats.find(
+          (pc) => pc.username.toLowerCase() === nick.toLowerCase()
+        )
+        if (!pm) {
+          pm = {
+            id: uuidv4(),
+            username: nick,
+            serverId: currentServer.id,
+            unreadCount: 0,
+            isMentioned: false,
+          }
+          ctx.store.addPrivateChat(currentServer.id, pm)
+        }
+        ctx.store.setCurrentChannel(pm.id)
+        if (messageParts.length > 0) {
+          const message = messageParts.join(' ')
+          ircClient.sendRaw(currentServer.id, `PRIVMSG ${nick} :${message}`)
+          const hasEchoMessage = currentServer.capabilities?.includes('echo-message') ?? false
+          if (!hasEchoMessage) {
+            ctx.store.addMessage(pm.id, {
+              id: uuidv4(),
+              type: 'message',
+              content: message,
+              timestamp: new Date(),
+              userId: currentServer.nickname,
+              channelId: pm.id,
+              serverId: currentServer.id,
+              reactions: [],
+              replyMessage: null,
+              mentioned: [],
+            })
+          }
+        }
+        return { success: true }
+      },
+    })
+
+    this.register({
+      name: 'notice',
+      aliases: [],
+      description: 'Send a NOTICE to a nick or channel',
+      usage: '/notice <target> <message>',
+      minArgs: 2,
+      execute: async (args, ctx) => {
+        const [target, ...messageParts] = args
+        const message = messageParts.join(' ')
+        const { ircClient, currentServer } = ctx
+        if (!ircClient || !currentServer) {
+          return { success: false, message: 'Not connected to a server' }
+        }
+        ircClient.sendRaw(currentServer.id, `NOTICE ${target} :${message}`)
+        return { success: true }
+      },
+    })
+
+    for (const [name, service] of [
+      ['ns', 'NickServ'],
+      ['cs', 'ChanServ'],
+      ['os', 'OperServ'],
+    ] as const) {
+      this.register({
+        name,
+        aliases: [],
+        description: `Send a message to ${service}`,
+        usage: `/${name} <command> [args]`,
+        minArgs: 1,
+        execute: async (args, ctx) => {
+          const { ircClient, currentServer } = ctx
+          if (!ircClient || !currentServer) {
+            return { success: false, message: 'Not connected to a server' }
+          }
+          ircClient.sendRaw(currentServer.id, `PRIVMSG ${service} :${args.join(' ')}`)
+          return { success: true }
+        },
+      })
+    }
 
     this.register({
       name: 'me',
