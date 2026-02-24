@@ -42,8 +42,8 @@ jobs:
             target: bun-linux-arm64
             artifact: tobby-aarch64-linux
 
-          # macOS Intel (cross-compiled from Apple Silicon — macos-13 is deprecated)
-          - runs-on: macos-latest
+          # macOS Intel (macos-13 is deprecated; macos-15-intel is the successor)
+          - runs-on: macos-15-intel
             target: bun-darwin-x64
             artifact: tobby-x86_64-macos
 
