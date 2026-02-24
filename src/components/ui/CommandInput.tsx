@@ -196,7 +196,8 @@ export function CommandInput({ width }: CommandInputProps) {
     }
 
     // Ctrl+Space toggles selection mode; also closes search if open
-    if (key.ctrl && key.name === 'space' && !activeModal) {
+    // key.name is 'space' via legacy/tmux (NUL byte) or ' ' via Kitty keyboard protocol (\x1b[32;5u)
+    if (key.ctrl && (key.name === 'space' || key.name === ' ') && !activeModal) {
       if (messageSearch !== null) {
         setMessageSearch(null)
         setSelectedMessage(null)
