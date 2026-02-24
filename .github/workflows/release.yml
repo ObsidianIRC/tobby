@@ -27,9 +27,8 @@ jobs:
 
   # ── Build compiled binaries and create GitHub release ──────────────────────
   publish-binaries:
-    permissions:
-      contents: write
     strategy:
+      fail-fast: false
       matrix:
         include:
           # Linux x86_64
@@ -78,11 +77,31 @@ jobs:
         if: runner.os == 'Linux'
         run: gzexe ${{ matrix.artifact }} && rm ${{ matrix.artifact }}~
 
-      - name: Upload to GitHub release
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+  # ── Create GitHub release with all binaries ─────────────────────────────────
+  create-release:
+    needs: publish-binaries
+    if: always() && contains(needs.publish-binaries.result, 'success')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           name: tobby ${{ github.ref_name }}
           generate_release_notes: true
-          files: ${{ matrix.artifact }}
+          files: artifacts/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
