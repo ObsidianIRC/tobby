@@ -62,5 +62,3 @@ export class ActionRegistry<TStore = unknown> {
     return this.getAll().find((action) => action.keybinding === keybinding)
   }
 }
-
-export const actionRegistry = new ActionRegistry()

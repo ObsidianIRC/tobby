@@ -38,8 +38,3 @@ export const SplitBorderRight: Pick<BoxProps, 'border' | 'borderStyle' | 'custom
     rightT: '',
   },
 }
-
-// No border variant (for panes without borders)
-export const NoBorder: Pick<BoxProps, 'border'> = {
-  border: false,
-}

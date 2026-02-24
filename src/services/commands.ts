@@ -1,15 +1,16 @@
 import { v4 as uuidv4 } from 'uuid'
 import { checkServerRestriction, checkNickRestriction } from '@/utils/restrictions'
+import { createMessage } from '@/utils/messageFactory'
 import type { ActionRegistry } from '@/actions'
 import type { ActionContext } from '@/types'
 import type { AppStore } from '@/store'
 
-export interface CommandResult {
+interface CommandResult {
   success: boolean
   message?: string
 }
 
-export interface IRCCommand {
+interface IRCCommand {
   name: string
   aliases: string[]
   description: string
@@ -104,18 +105,10 @@ export class CommandParser {
         if (ctx.currentChannel) {
           const { addMessage } = ctx.store
           for (const line of helpLines) {
-            addMessage(ctx.currentChannel.id, {
-              id: `help-${Date.now()}-${Math.random()}`,
-              type: 'system',
-              content: line,
-              timestamp: new Date(),
-              userId: 'system',
-              channelId: ctx.currentChannel.id,
-              serverId: ctx.currentServer!.id,
-              reactions: [],
-              replyMessage: null,
-              mentioned: [],
-            })
+            addMessage(
+              ctx.currentChannel.id,
+              createMessage('system', line, 'system', ctx.currentChannel.id, ctx.currentServer!.id)
+            )
           }
         }
 
@@ -189,8 +182,8 @@ export class CommandParser {
       usage: '/msg <target> <message>',
       minArgs: 2,
       execute: async (args, ctx) => {
-        const [target, ...messageParts] = args
-        const message = messageParts.join(' ')
+        const target = args[0]!
+        const message = args.slice(1).join(' ')
         const { ircClient, currentServer } = ctx
         if (!ircClient || !currentServer) {
           return { success: false, message: 'Not connected to a server' }
@@ -204,45 +197,35 @@ export class CommandParser {
               (c) => c.name.toLowerCase() === target.toLowerCase()
             )
             if (channel) {
-              ctx.store.addMessage(channel.id, {
-                id: uuidv4(),
-                type: 'message',
-                content: message,
-                timestamp: new Date(),
-                userId: currentServer.nickname,
-                channelId: channel.id,
-                serverId: currentServer.id,
-                reactions: [],
-                replyMessage: null,
-                mentioned: [],
-              })
+              ctx.store.addMessage(
+                channel.id,
+                createMessage(
+                  'message',
+                  message,
+                  currentServer.nickname,
+                  channel.id,
+                  currentServer.id
+                )
+              )
             }
           } else {
-            let pm = currentServer.privateChats.find(
+            const existing = currentServer.privateChats.find(
               (pc) => pc.username.toLowerCase() === target.toLowerCase()
             )
-            if (!pm) {
-              pm = {
-                id: uuidv4(),
-                username: target,
-                serverId: currentServer.id,
-                unreadCount: 0,
-                isMentioned: false,
-              }
+            const pm = existing ?? {
+              id: uuidv4(),
+              username: target,
+              serverId: currentServer.id,
+              unreadCount: 0,
+              isMentioned: false,
+            }
+            if (!existing) {
               ctx.store.addPrivateChat(currentServer.id, pm)
             }
-            ctx.store.addMessage(pm.id, {
-              id: uuidv4(),
-              type: 'message',
-              content: message,
-              timestamp: new Date(),
-              userId: currentServer.nickname,
-              channelId: pm.id,
-              serverId: currentServer.id,
-              reactions: [],
-              replyMessage: null,
-              mentioned: [],
-            })
+            ctx.store.addMessage(
+              pm.id,
+              createMessage('message', message, currentServer.nickname, pm.id, currentServer.id)
+            )
           }
         }
         return { success: true }
@@ -251,27 +234,28 @@ export class CommandParser {
 
     this.register({
       name: 'query',
-      aliases: [],
+      aliases: ['q'],
       description: 'Open a private chat window with a user',
       usage: '/query <nick> [message]',
       minArgs: 1,
       execute: async (args, ctx) => {
-        const [nick, ...messageParts] = args
+        const nick = args[0]!
+        const messageParts = args.slice(1)
         const { ircClient, currentServer } = ctx
         if (!ircClient || !currentServer) {
           return { success: false, message: 'Not connected to a server' }
         }
-        let pm = currentServer.privateChats.find(
+        const existing = currentServer.privateChats.find(
           (pc) => pc.username.toLowerCase() === nick.toLowerCase()
         )
-        if (!pm) {
-          pm = {
-            id: uuidv4(),
-            username: nick,
-            serverId: currentServer.id,
-            unreadCount: 0,
-            isMentioned: false,
-          }
+        const pm = existing ?? {
+          id: uuidv4(),
+          username: nick,
+          serverId: currentServer.id,
+          unreadCount: 0,
+          isMentioned: false,
+        }
+        if (!existing) {
           ctx.store.addPrivateChat(currentServer.id, pm)
         }
         ctx.store.setCurrentChannel(pm.id)
@@ -280,18 +264,10 @@ export class CommandParser {
           ircClient.sendRaw(currentServer.id, `PRIVMSG ${nick} :${message}`)
           const hasEchoMessage = currentServer.capabilities?.includes('echo-message') ?? false
           if (!hasEchoMessage) {
-            ctx.store.addMessage(pm.id, {
-              id: uuidv4(),
-              type: 'message',
-              content: message,
-              timestamp: new Date(),
-              userId: currentServer.nickname,
-              channelId: pm.id,
-              serverId: currentServer.id,
-              reactions: [],
-              replyMessage: null,
-              mentioned: [],
-            })
+            ctx.store.addMessage(
+              pm.id,
+              createMessage('message', message, currentServer.nickname, pm.id, currentServer.id)
+            )
           }
         }
         return { success: true }
@@ -363,18 +339,16 @@ export class CommandParser {
             `PRIVMSG ${privateChat.username} :\u0001ACTION ${action}\u0001`
           )
           if (!hasEchoMessage) {
-            ctx.store.addMessage(privateChat.id, {
-              id: uuidv4(),
-              type: 'action',
-              content: action,
-              timestamp: new Date(),
-              userId: currentServer.nickname,
-              channelId: privateChat.id,
-              serverId: currentServer.id,
-              reactions: [],
-              replyMessage: null,
-              mentioned: [],
-            })
+            ctx.store.addMessage(
+              privateChat.id,
+              createMessage(
+                'action',
+                action,
+                currentServer.nickname,
+                privateChat.id,
+                currentServer.id
+              )
+            )
           }
           return { success: true }
         }
@@ -384,18 +358,16 @@ export class CommandParser {
         }
         ircClient.sendMessage(currentServer.id, currentChannel.id, `\u0001ACTION ${action}\u0001`)
         if (!hasEchoMessage) {
-          ctx.store.addMessage(currentChannel.id, {
-            id: uuidv4(),
-            type: 'action',
-            content: action,
-            timestamp: new Date(),
-            userId: currentServer.nickname,
-            channelId: currentChannel.id,
-            serverId: currentServer.id,
-            reactions: [],
-            replyMessage: null,
-            mentioned: [],
-          })
+          ctx.store.addMessage(
+            currentChannel.id,
+            createMessage(
+              'action',
+              action,
+              currentServer.nickname,
+              currentChannel.id,
+              currentServer.id
+            )
+          )
         }
         return { success: true }
       },
@@ -510,34 +482,32 @@ export class CommandParser {
         }
         const { users } = ctx.currentChannel
         if (users.length === 0) {
-          ctx.store.addMessage(ctx.currentChannel.id, {
-            id: uuidv4(),
-            type: 'system',
-            content: `Users in ${ctx.currentChannel.name}: (none)`,
-            timestamp: new Date(),
-            userId: 'server',
-            username: 'server',
-            reactions: [],
-            replyMessage: null,
-            mentioned: [],
-          })
+          ctx.store.addMessage(
+            ctx.currentChannel.id,
+            createMessage(
+              'system',
+              `Users in ${ctx.currentChannel.name}: (none)`,
+              'server',
+              ctx.currentChannel.id,
+              ctx.currentChannel.serverId
+            )
+          )
           return { success: true }
         }
         const formatted = users
           .map((u) => (u.status ? `${u.status}${u.username}` : u.username))
           .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
           .join('  ')
-        ctx.store.addMessage(ctx.currentChannel.id, {
-          id: uuidv4(),
-          type: 'system',
-          content: `Users in ${ctx.currentChannel.name} [${users.length}]: ${formatted}`,
-          timestamp: new Date(),
-          userId: 'server',
-          username: 'server',
-          reactions: [],
-          replyMessage: null,
-          mentioned: [],
-        })
+        ctx.store.addMessage(
+          ctx.currentChannel.id,
+          createMessage(
+            'system',
+            `Users in ${ctx.currentChannel.name} [${users.length}]: ${formatted}`,
+            'server',
+            ctx.currentChannel.id,
+            ctx.currentChannel.serverId
+          )
+        )
         return { success: true }
       },
     })
@@ -752,39 +722,6 @@ export class CommandParser {
     })
 
     this.register({
-      name: 'query',
-      aliases: ['q'],
-      description: 'Open a private message window with a user',
-      usage: '/query <nick>',
-      minArgs: 1,
-      maxArgs: 1,
-      execute: async (args, ctx) => {
-        const nick = args[0]!
-        if (!ctx.currentServer) {
-          return { success: false, message: 'Not connected to a server' }
-        }
-        const { currentServer } = ctx
-        const existing = currentServer.privateChats.find(
-          (pc) => pc.username.toLowerCase() === nick.toLowerCase()
-        )
-        if (existing) {
-          ctx.store.setCurrentChannel(existing.id)
-          return { success: true }
-        }
-        const chat = {
-          id: uuidv4(),
-          username: nick as string,
-          serverId: currentServer.id,
-          unreadCount: 0 as number,
-          isMentioned: false as boolean,
-        }
-        ctx.store.addPrivateChat(currentServer.id, chat)
-        ctx.store.setCurrentChannel(chat.id)
-        return { success: true }
-      },
-    })
-
-    this.register({
       name: 'disconnect',
       aliases: [],
       description: 'Disconnect from and remove the current server',
@@ -824,18 +761,16 @@ export class CommandParser {
         // If echo-message is active the server will echo our PRIVMSG back through
         // the USERMSG handler which will show it in the channel. Otherwise add locally.
         if (!ctx.currentServer.capabilities?.includes('echo-message')) {
-          ctx.store.addMessage(ctx.currentChannel.id, {
-            id: uuidv4(),
-            type: 'whisper',
-            content: `→ ${target}: ${content}`,
-            timestamp: new Date(),
-            userId: ctx.currentServer.nickname,
-            channelId: ctx.currentChannel.id,
-            serverId: ctx.currentServer.id,
-            reactions: [],
-            replyMessage: null,
-            mentioned: [],
-          })
+          ctx.store.addMessage(
+            ctx.currentChannel.id,
+            createMessage(
+              'whisper',
+              `→ ${target}: ${content}`,
+              ctx.currentServer.nickname,
+              ctx.currentChannel.id,
+              ctx.currentServer.id
+            )
+          )
         }
         return { success: true }
       },

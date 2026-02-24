@@ -1,65 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { Message } from '@/types'
-
-// Mirrors msgLineCount from ChatPane — must stay in sync with the implementation
-const msgLineCount = (msg: Message, isSelected: boolean, expandMultilines = false): number => {
-  let h = 1
-  if (msg.isMultiline && msg.lines && msg.lines.length > 1) {
-    if (isSelected || expandMultilines) {
-      h += msg.lines.length - 1
-    } else {
-      h += Math.min(msg.lines.length - 1, 1)
-      if (msg.lines.length > 2) h += 1
-    }
-  }
-  if (msg.replyMessage) h += 1
-  if (msg.reactions.length > 0) h += 1
-  if (isSelected) h += 1
-  return h
-}
-
-/**
- * Pure version of the scroll adjustment logic in ChatPane's useEffect.
- *
- * isEntering=true  → only scroll if the selected message is outside the viewport (entering selection / retry pass)
- * goingDown=true   → keep bottom of selection at viewport bottom edge
- * goingDown=false  → keep top of selection at viewport top edge (going UP)
- *
- * Returns the new scrollTop, or null if no adjustment is needed.
- */
-function computeScrollAdjustment(
-  messages: Message[],
-  selected: Message,
-  viewportH: number,
-  currentScrollTop: number,
-  { isEntering = true, goingDown = false }: { isEntering?: boolean; goingDown?: boolean } = {}
-): number | null {
-  const idx = messages.findIndex((m) => m.id === selected.id)
-  if (idx === -1) return null
-
-  let startLine = 0
-  for (let i = 0; i < idx; i++) {
-    const m = messages[i]
-    if (m) startLine += msgLineCount(m, false)
-  }
-  const selHeight = msgLineCount(selected, true)
-  const endLine = startLine + selHeight
-
-  if (isEntering) {
-    if (startLine < currentScrollTop) return startLine
-    if (endLine > currentScrollTop + viewportH) return endLine - viewportH
-    return null
-  }
-
-  if (goingDown) {
-    const SCROLL_MARGIN = 3
-    const desired = endLine - viewportH + SCROLL_MARGIN
-    return desired > currentScrollTop ? desired : null
-  }
-
-  // going up
-  return startLine < currentScrollTop ? startLine : null
-}
+import { msgLineCount } from '@/utils/msgLineCount'
+import { computeScrollAdjustment } from '@/utils/scrollAdjustment'
 
 const makeMsg = (id: string, overrides: Partial<Message> = {}): Message => ({
   id,
@@ -229,5 +171,13 @@ describe('chatPane scroll — edge cases', () => {
     const result = computeScrollAdjustment(msgs, lastSelectable, 10, 10)
     // startLine=17, endLine=19. 17 < 10? No. 19 > 10+10=20? No. → null (already visible)
     expect(result).toBeNull()
+  })
+})
+
+// Ensure the test uses the same msgLineCount as the utility (smoke-check import)
+describe('msgLineCount import sanity', () => {
+  it('matches expected line count for a selected message', () => {
+    const msg = makeMsg('x')
+    expect(msgLineCount(msg, true)).toBe(2) // 1 base + 1 hint row
   })
 })

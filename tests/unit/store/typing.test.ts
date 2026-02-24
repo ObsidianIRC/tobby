@@ -70,6 +70,7 @@ describe('NAMES merge behavior', () => {
           ],
           privateChats: [],
           isConnected: true,
+          connectionState: 'connected' as const,
           capabilities: [],
         },
       ],
@@ -78,7 +79,7 @@ describe('NAMES merge behavior', () => {
 
   it('updateChannel merges users without duplicates', () => {
     const { updateChannel, servers } = useStore.getState()
-    const channel = servers[0].channels[0]
+    const channel = servers[0]!.channels[0]!
 
     // Simulate NAMES merge logic: add new users, skip existing
     const incomingUsers = [
@@ -92,7 +93,7 @@ describe('NAMES merge behavior', () => {
       users: [...channel.users, ...toAdd],
     })
 
-    const updated = useStore.getState().servers[0].channels[0]
+    const updated = useStore.getState().servers[0]!.channels[0]!
     expect(updated.users.map((u) => u.username)).toEqual(['alice', 'bob', 'charlie'])
   })
 })

@@ -173,16 +173,16 @@ function parseArgs(args: string[]): ParsedArgs {
         result.server = args[++i]
         break
       case '--port':
-        result.port = parseInt(args[++i], 10)
+        result.port = parseInt(args[++i]!, 10)
         break
       case '--nick':
-        result.nick = args[++i]
+        result.nick = args[++i]!
         break
       case '--ssl':
         result.ssl = true
         break
       case '--channel':
-        result.channels.push(args[++i])
+        result.channels.push(args[++i]!)
         break
       case '--debug':
         result.debug = true

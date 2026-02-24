@@ -2,7 +2,7 @@ import os from 'os'
 import path from 'path'
 import fs from 'fs'
 
-export function getDataPath(): string {
+function getDataPath(): string {
   const platform = os.platform()
   const home = os.homedir()
 

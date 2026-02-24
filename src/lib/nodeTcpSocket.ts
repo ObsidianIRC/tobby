@@ -1,7 +1,7 @@
 import net from 'net'
 import tls from 'tls'
 
-export interface ISocket {
+interface ISocket {
   onopen: (() => void) | null
   onmessage: ((event: { data: string }) => void) | null
   onerror: ((error: Error) => void) | null
@@ -93,8 +93,4 @@ export class NodeTCPSocket implements ISocket {
       this.socket.end()
     }
   }
-}
-
-export function createNodeSocket(url: string): ISocket {
-  return new NodeTCPSocket(url)
 }

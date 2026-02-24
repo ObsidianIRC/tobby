@@ -1,10 +1,11 @@
 import type { StateCreator } from 'zustand'
 import type { IRCClient, EventMap } from '@/utils/ircClient'
 import type { AppStore } from '@/store'
-import type { Message, User } from '@/types'
+import type { User } from '@/types'
 import { v4 as uuidv4 } from 'uuid'
 import { stripIrcFormatting } from '@irc/messageFormatter'
 import { getDatabase } from '@/services/database'
+import { createMessage } from '@/utils/messageFactory'
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -42,6 +43,7 @@ interface KeepaliveState {
 const keepaliveState = new Map<string, KeepaliveState>()
 const PING_INTERVAL_MS = 30_000
 const PONG_TIMEOUT_MS = 30_000
+const TYPING_TIMEOUT_MS = 30_000
 // Backoff delays for successive reconnect attempts (ms)
 const RECONNECT_DELAYS_MS = [3_000, 6_000, 12_000, 24_000, 30_000]
 
@@ -94,7 +96,7 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       key,
       setTimeout(() => {
         get().clearTypingUser(channelId, nick)
-      }, 30000)
+      }, TYPING_TIMEOUT_MS)
     )
   },
 
@@ -127,19 +129,7 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
 
     const addServerMessage = (serverId: string, content: string) => {
       const { addMessage } = get()
-      const message: Message = {
-        id: uuidv4(),
-        type: 'system',
-        content,
-        timestamp: new Date(),
-        userId: 'server',
-        channelId: serverId,
-        serverId,
-        reactions: [],
-        replyMessage: null,
-        mentioned: [],
-      }
-      addMessage(serverId, message)
+      addMessage(serverId, createMessage('system', content, 'server', serverId, serverId))
     }
 
     // Connection events
@@ -248,18 +238,7 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       const currentChannelId = get().currentChannelId
       const targetId =
         (channelBelongsToServer(serverId, currentChannelId) ? currentChannelId : null) ?? serverId
-      addMessage(targetId, {
-        id: uuidv4(),
-        type: 'system',
-        content: text,
-        timestamp: new Date(),
-        userId: 'server',
-        channelId: targetId,
-        serverId,
-        reactions: [],
-        replyMessage: null,
-        mentioned: [],
-      })
+      addMessage(targetId, createMessage('system', text, 'server', targetId, serverId))
     }
 
     ircClient.on('WHOIS_USER', (data: EventMap['WHOIS_USER']) => {
@@ -418,20 +397,12 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
         ? ((get().messages.get(channel.id) ?? []).find((m) => m.msgid === replyMsgId) ?? null)
         : null
 
-      const message: Message = {
-        id: uuidv4(),
+      const message = createMessage(type, content, data.sender, channel.id, data.serverId, {
         msgid: data.mtags?.msgid,
-        type,
-        content,
         timestamp: data.timestamp,
-        userId: data.sender,
-        channelId: channel.id,
-        serverId: data.serverId,
-        reactions: [],
         replyMessage,
-        mentioned: [],
         tags: data.mtags,
-      }
+      })
 
       addMessage(channel.id, message)
 
@@ -495,20 +466,11 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
         const isSentByUs = data.sender === server.nickname
         const content = isSentByUs ? `→ ${data.target}: ${cleanContent}` : cleanContent
 
-        const message: Message = {
-          id: uuidv4(),
+        const message = createMessage('whisper', content, data.sender, channel.id, data.serverId, {
           msgid: data.mtags?.msgid,
-          type: 'whisper',
-          content,
           timestamp: data.timestamp,
-          userId: data.sender,
-          channelId: channel.id,
-          serverId: data.serverId,
-          reactions: [],
-          replyMessage: null,
-          mentioned: [],
           tags: data.mtags,
-        }
+        })
         addMessage(channel.id, message)
 
         if (currentChannelId !== channel.id) {
@@ -549,20 +511,19 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
         ? ((get().messages.get(privateChat.id) ?? []).find((m) => m.msgid === pmReplyMsgId) ?? null)
         : null
 
-      const message: Message = {
-        id: uuidv4(),
-        msgid: data.mtags?.msgid,
-        type: msgType,
-        content: msgContent,
-        timestamp: data.timestamp,
-        userId: data.sender,
-        channelId: privateChat.id,
-        serverId: data.serverId,
-        reactions: [],
-        replyMessage: pmReplyMessage,
-        mentioned: [],
-        tags: data.mtags,
-      }
+      const message = createMessage(
+        msgType,
+        msgContent,
+        data.sender,
+        privateChat.id,
+        data.serverId,
+        {
+          msgid: data.mtags?.msgid,
+          timestamp: data.timestamp,
+          replyMessage: pmReplyMessage,
+          tags: data.mtags,
+        }
+      )
 
       addMessage(privateChat.id, message)
 
@@ -602,18 +563,19 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
         (channelBelongsToServer(data.serverId, currentChannelId) ? currentChannelId : null) ??
         data.serverId
 
-      addMessage(targetId, {
-        id: uuidv4(),
-        type: 'notice',
-        content: stripIrcFormatting(data.message),
-        timestamp: data.timestamp,
-        userId: data.sender,
-        channelId: targetId,
-        serverId: data.serverId,
-        reactions: [],
-        replyMessage: null,
-        mentioned: [],
-      })
+      addMessage(
+        targetId,
+        createMessage(
+          'notice',
+          stripIrcFormatting(data.message),
+          data.sender,
+          targetId,
+          data.serverId,
+          {
+            timestamp: data.timestamp,
+          }
+        )
+      )
     })
 
     // NOTICE targeted at a channel
@@ -627,18 +589,17 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       )
       if (!channel) return
 
-      addMessage(channel.id, {
-        id: uuidv4(),
-        type: 'notice',
-        content: stripIrcFormatting(data.message),
-        timestamp: data.timestamp,
-        userId: data.sender,
-        channelId: channel.id,
-        serverId: data.serverId,
-        reactions: [],
-        replyMessage: null,
-        mentioned: [],
-      })
+      addMessage(
+        channel.id,
+        createMessage(
+          'notice',
+          stripIrcFormatting(data.message),
+          data.sender,
+          channel.id,
+          data.serverId,
+          { timestamp: data.timestamp }
+        )
+      )
     })
 
     // User join
@@ -673,19 +634,17 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
 
       // Add system message
       const { addMessage } = get()
-      const message: Message = {
-        id: uuidv4(),
-        type: 'join',
-        content: `${data.username} has joined ${data.channelName}`,
-        timestamp: ircClient.getLastMessageTime(data.serverId),
-        userId: data.username,
-        channelId: channel.id,
-        serverId: data.serverId,
-        reactions: [],
-        replyMessage: null,
-        mentioned: [],
-      }
-      addMessage(channel.id, message)
+      addMessage(
+        channel.id,
+        createMessage(
+          'join',
+          `${data.username} has joined ${data.channelName}`,
+          data.username,
+          channel.id,
+          data.serverId,
+          { timestamp: ircClient.getLastMessageTime(data.serverId) }
+        )
+      )
     })
 
     // User part
@@ -722,19 +681,17 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
         })
 
         // Add system message
-        const message: Message = {
-          id: uuidv4(),
-          type: 'part',
-          content: `${data.username} has left ${data.channelName}${data.reason ? ` (${data.reason})` : ''}`,
-          timestamp: ircClient.getLastMessageTime(data.serverId),
-          userId: data.username,
-          channelId: channel.id,
-          serverId: data.serverId,
-          reactions: [],
-          replyMessage: null,
-          mentioned: [],
-        }
-        addMessage(channel.id, message)
+        addMessage(
+          channel.id,
+          createMessage(
+            'part',
+            `${data.username} has left ${data.channelName}${data.reason ? ` (${data.reason})` : ''}`,
+            data.username,
+            channel.id,
+            data.serverId,
+            { timestamp: ircClient.getLastMessageTime(data.serverId) }
+          )
+        )
       }
     })
 
@@ -756,19 +713,17 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
 
         // Only show the quit message in channels the user was actually in
         if (userInChannel) {
-          const message: Message = {
-            id: uuidv4(),
-            type: 'quit',
-            content: `${data.username} has quit${data.reason ? ` (${data.reason})` : ''}`,
-            timestamp: ircClient.getLastMessageTime(data.serverId),
-            userId: data.username,
-            channelId: channel.id,
-            serverId: data.serverId,
-            reactions: [],
-            replyMessage: null,
-            mentioned: [],
-          }
-          addMessage(channel.id, message)
+          addMessage(
+            channel.id,
+            createMessage(
+              'quit',
+              `${data.username} has quit${data.reason ? ` (${data.reason})` : ''}`,
+              data.username,
+              channel.id,
+              data.serverId,
+              { timestamp: ircClient.getLastMessageTime(data.serverId) }
+            )
+          )
         }
       }
     })
@@ -795,19 +750,16 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
           })
 
           // Add system message
-          const message: Message = {
-            id: uuidv4(),
-            type: 'nick',
-            content: `${data.oldNick} is now known as ${data.newNick}`,
-            timestamp: new Date(),
-            userId: data.oldNick,
-            channelId: channel.id,
-            serverId: data.serverId,
-            reactions: [],
-            replyMessage: null,
-            mentioned: [],
-          }
-          addMessage(channel.id, message)
+          addMessage(
+            channel.id,
+            createMessage(
+              'nick',
+              `${data.oldNick} is now known as ${data.newNick}`,
+              data.oldNick,
+              channel.id,
+              data.serverId
+            )
+          )
         }
       }
     })
@@ -826,19 +778,16 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       })
 
       // Add system message
-      const message: Message = {
-        id: uuidv4(),
-        type: 'kick',
-        content: `${data.target} was kicked by ${data.username}${data.reason ? ` (${data.reason})` : ''}`,
-        timestamp: new Date(),
-        userId: data.username,
-        channelId: channel.id,
-        serverId: data.serverId,
-        reactions: [],
-        replyMessage: null,
-        mentioned: [],
-      }
-      addMessage(channel.id, message)
+      addMessage(
+        channel.id,
+        createMessage(
+          'kick',
+          `${data.target} was kicked by ${data.username}${data.reason ? ` (${data.reason})` : ''}`,
+          data.username,
+          channel.id,
+          data.serverId
+        )
+      )
     })
 
     // Names reply
@@ -957,23 +906,15 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
           ? ((get().messages.get(buffer.id) ?? []).find((m) => m.msgid === replyMsgId) ?? null)
           : null
 
-        const message: Message = {
-          id: uuidv4(),
+        const message = createMessage(type, content, data.sender, buffer.id, data.serverId, {
           msgid: data.mtags?.msgid,
           multilineMessageIds: data.messageIds,
           isMultiline: true,
           lines: data.lines,
-          type,
-          content,
           timestamp: data.timestamp,
-          userId: data.sender,
-          channelId: buffer.id,
-          serverId: data.serverId,
-          reactions: [],
           replyMessage,
-          mentioned: [],
           tags: data.mtags,
-        }
+        })
 
         addMessage(buffer.id, message)
 
@@ -1010,19 +951,16 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
         if (!channel) return
 
         // Add system message
-        const message: Message = {
-          id: uuidv4(),
-          type: 'mode',
-          content: `${data.sender} sets mode ${data.modestring} ${data.modeargs.join(' ')}`,
-          timestamp: new Date(),
-          userId: data.sender,
-          channelId: channel.id,
-          serverId: data.serverId,
-          reactions: [],
-          replyMessage: null,
-          mentioned: [],
-        }
-        addMessage(channel.id, message)
+        addMessage(
+          channel.id,
+          createMessage(
+            'mode',
+            `${data.sender} sets mode ${data.modestring} ${data.modeargs.join(' ')}`,
+            data.sender,
+            channel.id,
+            data.serverId
+          )
+        )
 
         // Apply prefix mode changes to the user list.
         // Prefix modes (q/a/o/h/v) each consume one nick argument.
@@ -1160,18 +1098,16 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
 
     updateServer(serverId, { isConnected: false, connectionState: 'reconnecting' })
 
-    addMessage(serverId, {
-      id: uuidv4(),
-      type: 'system',
-      content: `Connection lost. Reconnecting in ${Math.round(delay / 1000)}s\u2026`,
-      timestamp: new Date(),
-      userId: 'server',
-      channelId: serverId,
+    addMessage(
       serverId,
-      reactions: [],
-      replyMessage: null,
-      mentioned: [],
-    })
+      createMessage(
+        'system',
+        `Connection lost. Reconnecting in ${Math.round(delay / 1000)}s\u2026`,
+        'server',
+        serverId,
+        serverId
+      )
+    )
 
     state.reconnectTimeout = setTimeout(async () => {
       state.reconnectTimeout = null

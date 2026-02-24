@@ -10,6 +10,12 @@ import { copyToClipboard } from '../../utils/clipboard'
 import { focusInput } from '../../utils/inputFocus'
 import type { Message } from '../../types'
 import { SearchBar } from '../ui/SearchBar'
+import {
+  msgLineCount as baseMsgLineCount,
+  visibleLines as getVisibleLines,
+  hiddenCount as getHiddenCount,
+} from '../../utils/msgLineCount'
+import { computeScrollAdjustment } from '../../utils/scrollAdjustment'
 
 const SELECTABLE_TYPES: Message['type'][] = ['message', 'action']
 
@@ -68,11 +74,10 @@ function MultilineMessageView({
   isSelected: boolean
   highlightQuery?: string
 }) {
-  const lines = msg.lines ?? msg.content.split('\n')
   const nicknameColor = getNicknameColor(username)
-  const visibleLines = isSelected ? lines : lines.slice(0, 2)
-  const hiddenCount = lines.length - 2
-  const firstLine = visibleLines[0] ?? ''
+  const vLines = getVisibleLines(msg, isSelected)
+  const hCount = getHiddenCount(msg)
+  const firstLine = vLines[0] ?? ''
 
   return (
     <box flexDirection="column">
@@ -86,7 +91,7 @@ function MultilineMessageView({
           <span fg={THEME.foreground}>{firstLine}</span>
         )}
       </text>
-      {visibleLines.slice(1).map((line, i) => (
+      {vLines.slice(1).map((line, i) => (
         <text key={i}>
           <span fg={THEME.foreground}>
             {' '.repeat(offset)}
@@ -94,10 +99,10 @@ function MultilineMessageView({
           </span>
         </text>
       ))}
-      {!isSelected && hiddenCount > 0 && (
+      {!isSelected && hCount > 0 && (
         <box paddingLeft={offset}>
           <text fg={THEME.dimText}>
-            ▾ {hiddenCount} more line{hiddenCount !== 1 ? 's' : ''}
+            ▾ {hCount} more line{hCount !== 1 ? 's' : ''}
           </text>
         </box>
       )}
@@ -215,24 +220,13 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
 
   // Compute rendered line-height of a single message box
   const msgLineCount = (msg: Message, isSelected: boolean) => {
-    let h = 1 // first line always
-    // Account for word-wrapped single-line messages
+    let h = baseMsgLineCount(msg, isSelected, expandMultilines)
+    // Account for word-wrapped single-line messages (not part of the base utility)
     if (!msg.isMultiline && (msg.type === 'message' || msg.type === 'action')) {
       const { username } = formatMessage(msg)
       const wrapped = wordWrap(stripIrcFormatting(msg.content), contentWidth(username))
       if (wrapped.length > 1) h += wrapped.length - 1
     }
-    if (msg.isMultiline && msg.lines && msg.lines.length > 1) {
-      if (isSelected || expandMultilines) {
-        h += msg.lines.length - 1 // all remaining lines visible
-      } else {
-        h += Math.min(msg.lines.length - 1, 1) // at most the 2nd line
-        if (msg.lines.length > 2) h += 1 // chevron row
-      }
-    }
-    if (msg.replyMessage) h += 1
-    if (msg.reactions.length > 0) h += 1
-    if (isSelected) h += 1 // hints row
     return h
   }
 
@@ -263,39 +257,17 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
 
       const currentMsgs = allMessagesRef.current
       const viewportH = messagesHeightRef.current
-      const idx = currentMsgs.findIndex((m) => m.id === selectedMessage.id)
-      if (idx === -1) return
-
-      let startLine = 0
-      for (let i = 0; i < idx; i++) {
-        const m = currentMsgs[i]
-        if (m) startLine += msgLineCount(m, false)
-      }
-      const selHeight = msgLineCount(selectedMessage, true)
-      const endLine = startLine + selHeight
       const current = b.scrollTop
 
-      // Lines of breathing room kept below the selection when navigating down.
-      // Accounts for text-wrap discrepancies and makes scrolling feel eager.
-      const SCROLL_MARGIN = 3
-
-      if (isEntering) {
-        // Entering selection: only scroll if out of view
-        if (startLine < current) {
-          b.scrollTop = startLine
-        } else if (endLine > current + viewportH) {
-          b.scrollTop = endLine - viewportH
-        }
-      } else if (goingDown) {
-        // Keep selection SCROLL_MARGIN lines away from the viewport bottom.
-        // This triggers earlier than waiting for the edge, so the selection
-        // never slips off-screen even when line heights are slightly off.
-        const desired = endLine - viewportH + SCROLL_MARGIN
-        if (desired > current) b.scrollTop = desired
-      } else {
-        // Going UP: keep top of selection at viewport top edge
-        if (startLine < current) b.scrollTop = startLine
-      }
+      const newScrollTop = computeScrollAdjustment(
+        currentMsgs,
+        selectedMessage,
+        viewportH,
+        current,
+        { isEntering, goingDown },
+        msgLineCount
+      )
+      if (newScrollTop !== null) b.scrollTop = newScrollTop
     }
 
     const timer = setTimeout(applyScroll, 0)

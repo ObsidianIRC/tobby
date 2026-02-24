@@ -7,7 +7,7 @@ import { getNicknameColor } from './nickColors'
 
 export { stripIrcFormatting }
 
-export interface IrcSegment {
+interface IrcSegment {
   text: string
   fg?: string
   bg?: string

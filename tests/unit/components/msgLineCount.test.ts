@@ -1,33 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { Message } from '@/types'
-
-// Mirrors msgLineCount from ChatPane — kept in sync with the implementation
-const msgLineCount = (msg: Message, isSelected: boolean): number => {
-  let h = 1
-  if (msg.isMultiline && msg.lines && msg.lines.length > 1) {
-    if (isSelected) {
-      h += msg.lines.length - 1
-    } else {
-      h += Math.min(msg.lines.length - 1, 1)
-      if (msg.lines.length > 2) h += 1
-    }
-  }
-  if (msg.replyMessage) h += 1
-  if (msg.reactions.length > 0) h += 1
-  if (isSelected) h += 1
-  return h
-}
-
-// Mirrors the visible-lines logic from MultilineMessageView
-const visibleLines = (msg: Message, isSelected: boolean): string[] => {
-  const lines = msg.lines ?? msg.content.split('\n')
-  return isSelected ? lines : lines.slice(0, 2)
-}
-
-const hiddenCount = (msg: Message): number => {
-  const lines = msg.lines ?? msg.content.split('\n')
-  return lines.length - 2
-}
+import { msgLineCount, visibleLines, hiddenCount } from '@/utils/msgLineCount'
 
 const base: Message = {
   id: 'msg-1',

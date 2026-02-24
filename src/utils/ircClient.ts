@@ -2,12 +2,6 @@ import { IRCClient as BaseIRCClient, type EventMap } from '@irc/ircClient'
 import { NodeTCPSocket } from '../lib/nodeTcpSocket'
 
 /**
- * Type-safe event listener helper
- */
-export type IRCEventKey = keyof EventMap
-export type IRCEventCallback<K extends IRCEventKey> = (data: EventMap[K]) => void
-
-/**
  * Extended IRC client with Node.js TCP socket support
  *
  * This catches the Tauri socket error and manually creates a connection

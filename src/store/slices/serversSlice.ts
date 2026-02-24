@@ -1,6 +1,7 @@
 import type { Channel, PrivateChat, Server } from '@/types'
 import type { StateCreator } from 'zustand'
 import { getDatabase } from '../../services/database'
+import type { AppStore } from '@/store'
 
 export interface ServersSlice {
   servers: Server[]
@@ -20,7 +21,7 @@ export interface ServersSlice {
   reorderChannel: (serverId: string, channelId: string, direction: 'up' | 'down') => void
 }
 
-export const createServersSlice: StateCreator<ServersSlice> = (set, get) => ({
+export const createServersSlice: StateCreator<AppStore, [], [], ServersSlice> = (set, get) => ({
   servers: [],
 
   addServer: (server, persist = true) => {
@@ -33,7 +34,7 @@ export const createServersSlice: StateCreator<ServersSlice> = (set, get) => ({
         const db = getDatabase()
         db.saveServer(server)
       } catch (error) {
-        console.error('Failed to persist server:', error)
+        debugLog?.('Failed to persist server:', error)
       }
     }
   },
@@ -73,7 +74,7 @@ export const createServersSlice: StateCreator<ServersSlice> = (set, get) => ({
       const db = getDatabase()
       db.deleteServer(id)
     } catch (error) {
-      console.error('Failed to remove server:', error)
+      debugLog?.('Failed to remove server:', error)
     }
   },
 

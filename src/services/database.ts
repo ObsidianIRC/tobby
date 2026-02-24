@@ -2,7 +2,7 @@ import { Database } from 'bun:sqlite'
 import { getDatabasePath } from '../utils/paths'
 import type { Server, Channel } from '../types'
 
-export interface PersistedServer {
+interface PersistedServer {
   id: string
   name: string
   host: string
@@ -19,7 +19,7 @@ export interface PersistedServer {
   updated_at: number
 }
 
-export interface PersistedChannel {
+interface PersistedChannel {
   id: string
   server_id: string
   name: string

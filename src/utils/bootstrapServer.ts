@@ -9,7 +9,7 @@ export function deterministicChannelId(serverId: string, channelName: string): s
   return uuidv5(`${serverId}:${channelName}`, CHANNEL_NAMESPACE)
 }
 
-export interface CliServerArgs {
+interface CliServerArgs {
   host: string
   port: number
   nick: string
