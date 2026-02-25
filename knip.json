@@ -1,5 +1,5 @@
 {
   "project": ["src/**/*.{ts,tsx}"],
   "ignore": ["ObsidianIRC/**"],
-  "ignoreDependencies": ["highlight.js", "marked"]
+  "ignoreDependencies": ["@tauri-apps/api", "highlight.js", "marked"]
 }

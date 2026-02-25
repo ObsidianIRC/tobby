@@ -1,6 +1,6 @@
 {
   "name": "@mattfillipe/tobby",
-  "version": "0.1.21",
+  "version": "0.1.22",
   "description": "The Terminal Obby — a modern IRC client for the terminal",
   "type": "module",
   "repository": {
@@ -32,6 +32,7 @@
     "knip": "knip"
   },
   "devDependencies": {
+    "@tauri-apps/api": "^2.0.0",
     "highlight.js": "^11.11.1",
     "marked": "^16.4.0",
     "@eslint/js": "^9.39.2",
