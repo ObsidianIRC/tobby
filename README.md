@@ -1,5 +1,10 @@
 # tobby
 
+[![npm](https://img.shields.io/npm/v/@mattfillipe/tobby?color=crimson&label=npm)](https://www.npmjs.com/package/@mattfillipe/tobby)
+[![CI](https://img.shields.io/github/actions/workflow/status/ObsidianIRC/tobby/ci.yml?label=CI&logo=github)](https://github.com/ObsidianIRC/tobby/actions/workflows/ci.yml)
+[![AUR](https://img.shields.io/aur/version/tobby-bin?label=AUR&logo=archlinux&logoColor=white)](https://aur.archlinux.org/packages/tobby-bin)
+[![License](https://img.shields.io/github/license/ObsidianIRC/tobby)](LICENSE)
+
 <img width="1429" height="797" alt="CopyQ NBYveQ" src="https://github.com/user-attachments/assets/d768019a-2f38-44df-b64c-60f892437ab0" />
 
 **The Terminal Obby** — a keyboard-driven IRC client for the terminal.
