@@ -72,6 +72,7 @@ export class CommandParser {
           '  • /away [message]                Set/clear away',
           '  • /quit [reason]                 Quit',
           '  • /disconnect                    Disconnect and remove current server',
+          '  • /invite <nick> [#channel]        Invite nick to channel (defaults to current)',
           '  • /mode [#chan] [+/-modes] [args] Set channel/user modes',
           '  • /op <nick> [nick ...]          Give operator status',
           '  • /deop <nick> [nick ...]        Remove operator status',
@@ -549,6 +550,28 @@ export class CommandParser {
         } else {
           ctx.ircClient.sendRaw(ctx.currentServer.id, `MODE ${target} ${modeArgs.join(' ')}`)
         }
+        return { success: true }
+      },
+    })
+
+    this.register({
+      name: 'invite',
+      aliases: [],
+      description: 'Invite a user to a channel',
+      usage: '/invite <nick> [#channel]',
+      minArgs: 1,
+      maxArgs: 2,
+      execute: async (args, ctx) => {
+        const { ircClient, currentServer, currentChannel } = ctx
+        if (!ircClient || !currentServer) {
+          return { success: false, message: 'Not connected to a server' }
+        }
+        const nick = args[0]!
+        const channel = args[1] ?? currentChannel?.name
+        if (!channel) {
+          return { success: false, message: 'No channel specified and no active channel' }
+        }
+        ircClient.sendRaw(currentServer.id, `INVITE ${nick} ${channel}`)
         return { success: true }
       },
     })

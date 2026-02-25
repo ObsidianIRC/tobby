@@ -790,6 +790,30 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       )
     })
 
+    // Incoming INVITE (someone invited us, or invite-notify of someone else being invited)
+    ircClient.on('INVITE', (data: EventMap['INVITE']) => {
+      const { getServer, addMessage } = get()
+      const server = getServer(data.serverId)
+      if (!server) return
+
+      const isForUs = data.target.toLowerCase() === server.nickname.toLowerCase()
+
+      if (isForUs) {
+        // Show in whichever buffer the user is currently looking at so it's immediately visible
+        const currentChannelId = get().currentChannelId
+        const targetId =
+          (channelBelongsToServer(data.serverId, currentChannelId) ? currentChannelId : null) ??
+          data.serverId
+        addMessage(
+          targetId,
+          createMessage('invite', data.channel, data.inviter, targetId, data.serverId)
+        )
+      } else {
+        // invite-notify: someone else was invited — quieter system message in server buffer
+        addServerMessage(data.serverId, `${data.inviter} invited ${data.target} to ${data.channel}`)
+      }
+    })
+
     // Names reply
     ircClient.on('NAMES', (data: EventMap['NAMES']) => {
       const { getServer, updateChannel } = get()

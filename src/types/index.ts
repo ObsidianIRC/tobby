@@ -75,6 +75,7 @@ export interface Message {
     | 'nick'
     | 'mode'
     | 'whisper'
+    | 'invite'
   tags?: Record<string, string>
   replyTo?: string
   replyMessage: Message | null

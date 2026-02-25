@@ -459,6 +459,16 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
             <span fg={COLORS.magenta}>{msg.content}</span>
           </text>
         )
+      case 'invite':
+        return (
+          <text>
+            <span fg={THEME.dimText}>[{timestamp}]</span>
+            <span fg={COLORS.cyan}> ⟶ </span>
+            <span fg={getNicknameColor(username)}>{username}</span>
+            <span fg={COLORS.cyan}> invited you to join </span>
+            <span fg={THEME.accentCyan}>{msg.content}</span>
+          </text>
+        )
       case 'system':
         return (
           <text>
