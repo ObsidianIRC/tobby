@@ -51,10 +51,6 @@
     "prettier": "^3.8.1",
     "vitest": "^4.0.18"
   },
-  "alias": {
-    "@tauri-apps/api/core": "./stubs/tauri-core.ts",
-    "@tauri-apps/api/event": "./stubs/tauri-event.ts"
-  },
   "peerDependencies": {
     "typescript": "^5"
   },
