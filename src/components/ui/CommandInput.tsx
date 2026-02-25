@@ -94,7 +94,8 @@ export function CommandInput({ width }: CommandInputProps) {
     setErrorMessage('')
     resetCompletion()
 
-    const isCommand = text.startsWith('/')
+    // A leading space before / escapes command processing (matches parse() behaviour)
+    const isCommand = text.startsWith('/') && !rawText.startsWith(' ')
     const hasNewlines = text.includes('\n')
 
     if (!isCommand && hasNewlines && currentServer) {
@@ -165,7 +166,8 @@ export function CommandInput({ width }: CommandInputProps) {
     }
 
     try {
-      const result = await commandParser.parse(text, context)
+      // Pass rawText so parse() can detect the leading-space escape
+      const result = await commandParser.parse(rawText, context)
 
       if (!result.success) {
         setErrorMessage(result.message || 'Command failed')

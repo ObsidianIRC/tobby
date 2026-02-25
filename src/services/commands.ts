@@ -62,7 +62,7 @@ export class CommandParser {
           '  • /part [#channel]               Leave channel',
           '  • /msg <target> <text>           Send message to nick or channel',
           '  • /notice <target> <text>        Send a NOTICE to nick or channel',
-          '  • /ns /cs /os <cmd>              Shorthand for NickServ/ChanServ/OperServ',
+          '  • /<cmd> [args]                   Raw IRC command passthrough (e.g. /ns, /mode, /whois)',
           '  • /query <nick> [text]           Open PM window (optionally send message)',
           '  • /nick <newnick>                Change nickname',
           '  • /topic [new topic]             Get/set topic',
@@ -291,28 +291,6 @@ export class CommandParser {
         return { success: true }
       },
     })
-
-    for (const [name, service] of [
-      ['ns', 'NickServ'],
-      ['cs', 'ChanServ'],
-      ['os', 'OperServ'],
-    ] as const) {
-      this.register({
-        name,
-        aliases: [],
-        description: `Send a message to ${service}`,
-        usage: `/${name} <command> [args]`,
-        minArgs: 1,
-        execute: async (args, ctx) => {
-          const { ircClient, currentServer } = ctx
-          if (!ircClient || !currentServer) {
-            return { success: false, message: 'Not connected to a server' }
-          }
-          ircClient.sendRaw(currentServer.id, `PRIVMSG ${service} :${args.join(' ')}`)
-          return { success: true }
-        },
-      })
-    }
 
     this.register({
       name: 'me',
@@ -787,7 +765,9 @@ export class CommandParser {
   async parse(input: string, context: ActionContext<AppStore>): Promise<CommandResult> {
     const trimmed = input.trim()
 
-    if (!trimmed.startsWith('/')) {
+    // A leading space before / escapes command processing — send as a plain message.
+    // This lets users type " /literally" to post text that starts with a slash.
+    if (!trimmed.startsWith('/') || /^\s/.test(input)) {
       if (!context.currentServer) {
         return { success: false, message: 'No server connected' }
       }
@@ -806,7 +786,18 @@ export class CommandParser {
     const command = this.commands.get(commandName)
 
     if (!command) {
-      return { success: false, message: `Unknown command: /${commandName}` }
+      // Unknown command — pass through as raw IRC so undocumented server commands
+      // (e.g. /ns, /mode, /whois, /oper) work without needing explicit registration.
+      const { ircClient, currentServer } = context
+      if (!ircClient || !currentServer) {
+        return { success: false, message: 'Not connected to a server' }
+      }
+      const rawLine =
+        args.length > 0
+          ? `${commandName.toUpperCase()} ${args.join(' ')}`
+          : commandName.toUpperCase()
+      ircClient.sendRaw(currentServer.id, rawLine)
+      return { success: true }
     }
 
     if (args.length < command.minArgs) {
