@@ -1,6 +1,6 @@
 {
   "name": "@mattfillipe/tobby",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "description": "The Terminal Obby — a modern IRC client for the terminal",
   "type": "module",
   "repository": {
@@ -18,7 +18,7 @@
   "scripts": {
     "dev": "bun run src/index.tsx",
     "start": "bun run dist/index.js",
-    "build": "bun build src/index.tsx --outdir dist --target bun --minify",
+    "build": "bun build src/index.tsx --outdir dist --target bun --minify --external '@opentui/core' --external '@opentui/react' --external 'react'",
     "test": "vitest",
     "test:coverage": "vitest --coverage",
     "test:ui": "vitest --ui",
@@ -32,7 +32,7 @@
     "knip": "knip"
   },
   "devDependencies": {
-    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/api": "^2.9.1",
     "highlight.js": "^11.11.1",
     "marked": "^16.4.0",
     "@eslint/js": "^9.39.2",
