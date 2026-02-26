@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useKeyboard } from '@opentui/react'
+import type { ScrollBoxRenderable } from '@opentui/core'
 import Fuse from 'fuse.js'
 import { useStore } from '../../store'
 import { useAppContext } from '../../context/AppContext'
@@ -32,6 +33,18 @@ export function ChannelBrowserModal({ width, height }: ChannelBrowserModalProps)
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const programmaticUpdate = useRef(false)
+  const scrollBoxRef = useRef<ScrollBoxRenderable | null>(null)
+
+  useEffect(() => {
+    const box = scrollBoxRef.current
+    if (!box) return
+    const viewportHeight = box.height ?? 0
+    if (selectedIndex < box.scrollTop) {
+      box.scrollTop = selectedIndex
+    } else if (selectedIndex >= box.scrollTop + viewportHeight) {
+      box.scrollTop = selectedIndex - viewportHeight + 1
+    }
+  }, [selectedIndex])
 
   const modalWidth = Math.min(72, width - 4)
   const modalHeight = Math.min(24, height - 4)
@@ -188,7 +201,7 @@ export function ChannelBrowserModal({ width, height }: ChannelBrowserModalProps)
         />
       </box>
 
-      <scrollbox height={listHeight}>
+      <scrollbox ref={scrollBoxRef as React.RefObject<ScrollBoxRenderable>} height={listHeight}>
         {visibleItems.length === 0 ? (
           <box paddingLeft={2} paddingTop={1}>
             <text fg={THEME.mutedText}>{loading ? 'Fetching channel list…' : 'No results'}</text>

@@ -1,5 +1,6 @@
-import { useState, useMemo, useRef } from 'react'
+import React, { useState, useMemo, useRef, useEffect } from 'react'
 import { useKeyboard } from '@opentui/react'
+import type { ScrollBoxRenderable } from '@opentui/core'
 import Fuse from 'fuse.js'
 import { useStore } from '../../store'
 import { THEME, COLORS } from '../../constants/theme'
@@ -22,6 +23,18 @@ export function EmojiPickerModal({ width, height, onEmojiSelect }: EmojiPickerMo
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const programmaticUpdate = useRef(false)
+  const scrollBoxRef = useRef<ScrollBoxRenderable | null>(null)
+
+  useEffect(() => {
+    const box = scrollBoxRef.current
+    if (!box) return
+    const viewportHeight = box.height ?? 0
+    if (selectedIndex < box.scrollTop) {
+      box.scrollTop = selectedIndex
+    } else if (selectedIndex >= box.scrollTop + viewportHeight) {
+      box.scrollTop = selectedIndex - viewportHeight + 1
+    }
+  }, [selectedIndex])
   const closeModal = useStore((state) => state.closeModal)
   const selectedMessage = useStore((state) => state.selectedMessage)
   const currentServerId = useStore((state) => state.currentServerId)
@@ -158,7 +171,10 @@ export function EmojiPickerModal({ width, height, onEmojiSelect }: EmojiPickerMo
         />
       </box>
 
-      <scrollbox height={modalHeight - 4}>
+      <scrollbox
+        ref={scrollBoxRef as React.RefObject<ScrollBoxRenderable>}
+        height={modalHeight - 4}
+      >
         {visibleItems.length === 0 ? (
           <box paddingLeft={2} paddingTop={1}>
             <text fg={THEME.mutedText}>No results</text>

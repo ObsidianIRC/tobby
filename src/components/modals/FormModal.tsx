@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useKeyboard } from '@opentui/react'
-import type { InputRenderable } from '@opentui/core'
+import type { InputRenderable, ScrollBoxRenderable } from '@opentui/core'
 import { ModalShell } from './ModalShell'
 import { THEME } from '../../constants/theme'
 import { updateRealFromMasked, FORM_MASK } from '../../utils/formMasking'
@@ -66,6 +66,24 @@ export function FormModal({
   // Refs for secret <input> elements — allows setText() without re-triggering onInput
   const secretRefs = useRef<Map<string, InputRenderable>>(new Map())
   const [focusedField, setFocusedField] = useState(() => firstEditable(fields))
+  const scrollBoxRef = useRef<ScrollBoxRenderable | null>(null)
+
+  // Scroll the field into view when focus changes
+  useEffect(() => {
+    const box = scrollBoxRef.current
+    if (!box) return
+    // Each field: label (1) + input (1) + marginBottom (1) = 3 rows; paddingTop = 1
+    const FIELD_HEIGHT = 3
+    const PADDING_TOP = 1
+    const fieldTop = PADDING_TOP + focusedField * FIELD_HEIGHT
+    const fieldBottom = fieldTop + 2 // label + input
+    const viewportHeight = box.height ?? 0
+    if (fieldTop < box.scrollTop) {
+      box.scrollTop = fieldTop
+    } else if (fieldBottom >= box.scrollTop + viewportHeight) {
+      box.scrollTop = fieldBottom - viewportHeight + 1
+    }
+  }, [focusedField])
 
   const modalWidth = Math.min(55, width - 4)
   const errorOffset = error ? 1 : 0
@@ -158,6 +176,7 @@ export function FormModal({
       footer={footer}
     >
       <scrollbox
+        ref={scrollBoxRef as React.RefObject<ScrollBoxRenderable>}
         height={modalHeight - 4 - errorOffset}
         paddingLeft={2}
         paddingRight={2}

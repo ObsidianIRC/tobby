@@ -1,5 +1,6 @@
 import { useKeyboard } from '@opentui/react'
-import { useState, useMemo } from 'react'
+import React, { useState, useMemo, useRef, useEffect } from 'react'
+import type { ScrollBoxRenderable } from '@opentui/core'
 import Fuse from 'fuse.js'
 import { ModalShell } from './ModalShell'
 import { THEME } from '../../constants/theme'
@@ -38,6 +39,18 @@ export function ListModal({
   emptyMessage = 'No results',
 }: ListModalProps) {
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const scrollBoxRef = useRef<ScrollBoxRenderable | null>(null)
+
+  useEffect(() => {
+    const box = scrollBoxRef.current
+    if (!box) return
+    const viewportHeight = box.height ?? 0
+    if (selectedIndex < box.scrollTop) {
+      box.scrollTop = selectedIndex
+    } else if (selectedIndex >= box.scrollTop + viewportHeight) {
+      box.scrollTop = selectedIndex - viewportHeight + 1
+    }
+  }, [selectedIndex])
 
   const modalWidth = Math.min(60, width - 4)
   const modalHeight = Math.min(20, height - 4)
@@ -146,7 +159,11 @@ export function ListModal({
         </text>
       </box>
 
-      <scrollbox focused height={modalHeight - 5}>
+      <scrollbox
+        ref={scrollBoxRef as React.RefObject<ScrollBoxRenderable>}
+        focused
+        height={modalHeight - 5}
+      >
         {visibleItems.length === 0 ? (
           <box paddingLeft={2} paddingTop={1}>
             <text fg={THEME.mutedText}>{emptyMessage}</text>

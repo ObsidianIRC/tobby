@@ -1,5 +1,6 @@
 import { IRCClient as BaseIRCClient, type EventMap } from '@irc/ircClient'
 import { NodeTCPSocket } from '../lib/nodeTcpSocket'
+import { getRestrictions } from './restrictions'
 
 /**
  * Extended IRC client with Node.js TCP socket support
@@ -27,6 +28,21 @@ export class IRCClient extends BaseIRCClient {
     this._pongCallbacks.delete(serverId)
   }
 
+  override sendRaw(serverId: string, command: string): void {
+    const restrictions = getRestrictions()
+    // Block NICK changes to anything other than the restricted nick
+    if (restrictions.nick) {
+      const upper = command.trimStart().toUpperCase()
+      if (upper.startsWith('NICK ')) {
+        const requested = command.trim().slice(5).trim()
+        const base = requested.replace(/_+$/, '').toLowerCase()
+        const allowed = restrictions.nick.replace(/_+$/, '').toLowerCase()
+        if (base !== allowed) return
+      }
+    }
+    super.sendRaw(serverId, command)
+  }
+
   override async connect(
     name: string,
     host: string,
@@ -39,6 +55,16 @@ export class IRCClient extends BaseIRCClient {
   ): Promise<any> {
     // Don't call super.connect() at all - it tries to use Tauri sockets which don't exist
     // Directly implement the connection using Node.js sockets
+
+    const restrictions = getRestrictions()
+    if (restrictions.server && host.toLowerCase() !== restrictions.server.toLowerCase()) {
+      throw new Error(`Server restricted to: ${restrictions.server}`)
+    }
+    if (restrictions.nick) {
+      nickname = restrictions.nick
+      // SASL username follows the restricted nick unless explicitly supplied otherwise
+      if (!saslAccountName) saslAccountName = restrictions.nick
+    }
 
     const url = `${port === 6697 || port === 6679 ? 'ircs' : 'irc'}://${host}:${port}`
 

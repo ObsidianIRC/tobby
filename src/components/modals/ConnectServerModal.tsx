@@ -45,7 +45,13 @@ export function ConnectServerModal({ width, height }: ConnectServerModalProps) {
       readOnly: !!restrictions.nick,
     },
     { key: 'password', label: 'Password', placeholder: '(optional)', secret: true },
-    { key: 'saslUsername', label: 'SASL Username', placeholder: '(optional)' },
+    {
+      key: 'saslUsername',
+      label: 'SASL Username',
+      placeholder: '(optional)',
+      defaultValue: restrictions.nick ?? undefined,
+      readOnly: !!restrictions.nick,
+    },
     { key: 'saslPassword', label: 'SASL Password', placeholder: '(optional)', secret: true },
   ]
 
