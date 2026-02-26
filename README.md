@@ -47,7 +47,7 @@ To react, reply hit `Ctrl+Space` to enter message selection mode, navigate to th
 | Key | Action |
 |---|---|
 | `Ctrl+K` | Open action menu (connect, join, disconnect, …) |
-| `Ctrl+Space` | Enter message selection / scroll mode |
+| `Ctrl+Space` / `Alt+K` / `Alt+↑` / `Shift+↑` | Enter message selection / scroll mode |
 | `Ctrl+G` | Toggle members sidebar |
 | `Ctrl+L` | Clear current buffer |
 | `Ctrl+O` | Toggle multiline expand |
@@ -56,7 +56,7 @@ To react, reply hit `Ctrl+Space` to enter message selection mode, navigate to th
 | `Alt+N` / `Alt+P` | Next / previous buffer |
 | `Tab` | Tab-complete nicks and commands |
 
-### Message selection mode (`Ctrl+Space`)
+### Message selection mode (`Ctrl+Space` / `Alt+K` / `Alt+↑` / `Shift+↑`)
 
 | Key | Action |
 |---|---|

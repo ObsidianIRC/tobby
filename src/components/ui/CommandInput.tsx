@@ -197,9 +197,14 @@ export function CommandInput({ width }: CommandInputProps) {
       return
     }
 
-    // Ctrl+Space toggles selection mode; also closes search if open
+    // Ctrl+Space / Alt+Up / Shift+Up / Alt+K toggles selection mode; also closes search if open
     // key.name is 'space' via legacy/tmux (NUL byte) or ' ' via Kitty keyboard protocol (\x1b[32;5u)
-    if (key.ctrl && (key.name === 'space' || key.name === ' ') && !activeModal) {
+    const isToggleSelection =
+      (key.ctrl && (key.name === 'space' || key.name === ' ')) ||
+      ((key.meta || key.option) && key.name === 'up') ||
+      (key.shift && key.name === 'up') ||
+      ((key.meta || key.option) && key.name === 'k')
+    if (isToggleSelection && !activeModal) {
       if (messageSearch !== null) {
         setMessageSearch(null)
         setSelectedMessage(null)
@@ -310,6 +315,7 @@ export function CommandInput({ width }: CommandInputProps) {
       }
 
       if (key.name === 'r') {
+        key.preventDefault()
         setReplyingTo(selectedMessage)
         setSelectedMessage(null)
         focusInput()
@@ -317,11 +323,13 @@ export function CommandInput({ width }: CommandInputProps) {
       }
 
       if (key.name === 'e') {
+        key.preventDefault()
         openModal('emojiPicker')
         return
       }
 
       if (key.name === 'y') {
+        key.preventDefault()
         copyToClipboard(stripIrcFormatting(selectedMessage.content))
         setSelectedMessage(null)
         return
