@@ -34,9 +34,39 @@ export class CommandParser {
       name: 'help',
       aliases: ['h', '?'],
       description: 'Show help information',
-      usage: '/help',
+      usage: '/help [command]',
       minArgs: 0,
-      execute: async (_, ctx) => {
+      maxArgs: 1,
+      execute: async (args, ctx) => {
+        const { currentChannelId, servers = [] } = ctx.store
+        const server = servers.find((s) => s.id === ctx.currentServer?.id)
+        const bufferId =
+          ctx.currentChannel?.id ??
+          server?.privateChats.find((pc) => pc.id === currentChannelId)?.id
+        const serverId = ctx.currentServer?.id
+
+        const addLine = (line: string) => {
+          if (bufferId && serverId) {
+            ctx.store.addMessage(
+              bufferId,
+              createMessage('system', line, 'system', bufferId, serverId)
+            )
+          }
+        }
+
+        if (args[0]) {
+          const name = args[0].replace(/^\//, '').toLowerCase()
+          const cmd = this.commands.get(name)
+          if (!cmd) {
+            return { success: false, message: `Unknown command: ${args[0]}` }
+          }
+          addLine(`${cmd.usage}  —  ${cmd.description}`)
+          if (cmd.aliases.length > 0) {
+            addLine(`  aliases: ${cmd.aliases.map((a) => '/' + a).join(', ')}`)
+          }
+          return { success: true }
+        }
+
         const helpLines = [
           '══════════════════════════════════════════════════════════',
           '             tobby IRC Client - Help                     ',
@@ -102,15 +132,8 @@ export class CommandParser {
           '══════════════════════════════════════════════════════════',
         ]
 
-        // Add each help line as a system message
-        if (ctx.currentChannel) {
-          const { addMessage } = ctx.store
-          for (const line of helpLines) {
-            addMessage(
-              ctx.currentChannel.id,
-              createMessage('system', line, 'system', ctx.currentChannel.id, ctx.currentServer!.id)
-            )
-          }
+        for (const line of helpLines) {
+          addLine(line)
         }
 
         return { success: true, message: 'Help displayed in chat' }
@@ -684,7 +707,7 @@ export class CommandParser {
     this.register({
       name: 'history',
       aliases: [],
-      description: 'Fetch chat history for the current channel',
+      description: 'Fetch chat history for the current channel or DM',
       usage: '/history [count]',
       minArgs: 0,
       maxArgs: 1,
@@ -692,17 +715,19 @@ export class CommandParser {
         if (!ctx.currentServer || !ctx.ircClient) {
           return { success: false, message: 'Not connected to a server' }
         }
-        if (!ctx.currentChannel) {
-          return { success: false, message: 'No active channel' }
+        const { currentChannelId, servers = [] } = ctx.store
+        const server = servers.find((s) => s.id === ctx.currentServer!.id)
+        const target =
+          ctx.currentChannel?.name ??
+          server?.privateChats.find((pc) => pc.id === currentChannelId)?.username
+        if (!target) {
+          return { success: false, message: 'No active channel or DM' }
         }
         const count = args[0] ? parseInt(args[0], 10) : 100
         if (isNaN(count) || count < 1) {
           return { success: false, message: 'Count must be a positive number' }
         }
-        ctx.ircClient.sendRaw(
-          ctx.currentServer.id,
-          `CHATHISTORY LATEST ${ctx.currentChannel.name} * ${count}`
-        )
+        ctx.ircClient.sendRaw(ctx.currentServer.id, `CHATHISTORY LATEST ${target} * ${count}`)
         return { success: true }
       },
     })
