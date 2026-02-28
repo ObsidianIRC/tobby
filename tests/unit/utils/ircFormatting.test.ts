@@ -1,5 +1,5 @@
 import { test, expect, describe } from 'vitest'
-import { parseIrcFormatting } from '../../../src/utils/ircFormatting'
+import { parseIrcFormatting, ircWordWrap } from '../../../src/utils/ircFormatting'
 
 describe('parseIrcFormatting', () => {
   test('plain text returns single segment with no formatting', () => {
@@ -127,5 +127,43 @@ describe('parseIrcFormatting', () => {
     const result = parseIrcFormatting('\x0399Hello')
     expect(result).toHaveLength(1)
     expect(result[0]!.fg).toBeUndefined()
+  })
+
+  test('reverse video \\x16 is consumed, not passed through as text', () => {
+    const result = parseIrcFormatting('\x16Hello')
+    expect(result).toHaveLength(1)
+    expect(result[0]!.text).toBe('Hello')
+  })
+
+  test('\\x16 between text segments does not leak raw bytes', () => {
+    const result = parseIrcFormatting('a\x16b')
+    expect(result.map((s) => s.text).join('')).toBe('ab')
+  })
+})
+
+describe('ircWordWrap', () => {
+  test('short content is returned unchanged', () => {
+    const content = '\x034hello'
+    expect(ircWordWrap(content, 20)).toEqual([content])
+  })
+
+  test('preserves IRC codes in first line', () => {
+    const content = '\x034Hello world this is a long message'
+    const lines = ircWordWrap(content, 11)
+    // eslint-disable-next-line no-control-regex -- IRC color code in test assertion
+    expect(lines[0]).toMatch(/\x034/)
+  })
+
+  test('same number of lines as plain word wrap', () => {
+    const content = '\x034Hello world foo bar baz qux'
+    const lines = ircWordWrap(content, 5)
+    // each plain word is 3-5 chars, should each get its own line
+    expect(lines.length).toBeGreaterThan(1)
+  })
+
+  test('leading IRC code included in first line', () => {
+    const content = '\x0351With soothing comfort agents'
+    const lines = ircWordWrap(content, 12)
+    expect(lines[0]!.startsWith('\x0351')).toBe(true)
   })
 })

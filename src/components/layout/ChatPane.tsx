@@ -4,7 +4,7 @@ import { MacOSScrollAccel } from '@opentui/core'
 import type { ScrollBoxRenderable } from '@opentui/core'
 import { useStore } from '../../store'
 import { THEME, COLORS } from '../../constants/theme'
-import { renderIrcText, stripIrcFormatting } from '../../utils/ircFormatting'
+import { renderIrcText, stripIrcFormatting, ircWordWrap } from '../../utils/ircFormatting'
 import { getNicknameColor } from '../../utils/nickColors'
 import { copyToClipboard } from '../../utils/clipboard'
 import { focusInput } from '../../utils/inputFocus'
@@ -291,7 +291,8 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
         const plainContent = stripIrcFormatting(msg.content)
         const lines = wordWrap(plainContent, contentWidth(username))
         if (lines.length > 1) {
-          const firstLine = lines[0] ?? ''
+          const rawLines = ircWordWrap(msg.content, contentWidth(username))
+          const firstRawLine = rawLines[0] ?? ''
           return (
             <box flexDirection="column">
               <text>
@@ -300,19 +301,31 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
                 <span fg={THEME.mutedText}> › </span>
                 {highlightQuery ? (
                   <InlineHighlight
-                    text={firstLine}
+                    text={lines[0] ?? ''}
                     query={highlightQuery}
                     baseFg={THEME.foreground}
                   />
                 ) : (
-                  <span fg={THEME.foreground}>{firstLine}</span>
+                  <span fg={THEME.foreground}>
+                    {renderIrcText(
+                      firstRawLine,
+                      `${msg.id}-0`,
+                      currentServer?.nickname,
+                      channelUsernames
+                    )}
+                  </span>
                 )}
               </text>
-              {lines.slice(1).map((line, i) => (
+              {rawLines.slice(1).map((rawLine, i) => (
                 <text key={i}>
                   <span fg={THEME.foreground}>
                     {' '.repeat(offset)}
-                    {line}
+                    {renderIrcText(
+                      rawLine,
+                      `${msg.id}-${i + 1}`,
+                      currentServer?.nickname,
+                      channelUsernames
+                    )}
                   </span>
                 </text>
               ))}
@@ -343,7 +356,8 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
         const plainContent = stripIrcFormatting(msg.content)
         const lines = wordWrap(plainContent, contentWidth(username))
         if (lines.length > 1) {
-          const firstLine = lines[0] ?? ''
+          const rawLines = ircWordWrap(msg.content, contentWidth(username))
+          const firstRawLine = rawLines[0] ?? ''
           return (
             <box flexDirection="column">
               <text>
@@ -351,19 +365,31 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
                 <span fg={COLORS.magenta}> * {username} </span>
                 {highlightQuery ? (
                   <InlineHighlight
-                    text={firstLine}
+                    text={lines[0] ?? ''}
                     query={highlightQuery}
                     baseFg={COLORS.magenta}
                   />
                 ) : (
-                  <span fg={COLORS.magenta}>{firstLine}</span>
+                  <span fg={COLORS.magenta}>
+                    {renderIrcText(
+                      firstRawLine,
+                      `${msg.id}-0`,
+                      currentServer?.nickname,
+                      channelUsernames
+                    )}
+                  </span>
                 )}
               </text>
-              {lines.slice(1).map((line, i) => (
+              {rawLines.slice(1).map((rawLine, i) => (
                 <text key={i}>
                   <span fg={COLORS.magenta}>
                     {' '.repeat(offset)}
-                    {line}
+                    {renderIrcText(
+                      rawLine,
+                      `${msg.id}-${i + 1}`,
+                      currentServer?.nickname,
+                      channelUsernames
+                    )}
                   </span>
                 </text>
               ))}

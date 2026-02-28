@@ -18,7 +18,7 @@ interface IrcSegment {
 }
 
 // eslint-disable-next-line no-control-regex -- IRC formatting uses control codes by design
-const IRC_CONTROL_RE = /(\x03(?:\d{1,2}(?:,\d{1,2})?)?|[\x02\x1f\x1d\x1e\x11\x0f])/gu
+const IRC_CONTROL_RE = /(\x03(?:\d{1,2}(?:,\d{1,2})?)?|[\x02\x1f\x1d\x1e\x16\x11\x0f])/gu
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -62,6 +62,9 @@ export function parseIrcFormatting(text: string): IrcSegment[] {
           break
         case '\x1e':
           strikethrough = !strikethrough
+          break
+        case '\x16':
+          // reverse video — not rendered, just consumed
           break
         case '\x11':
           break
@@ -196,4 +199,71 @@ export function renderIrcText(
   }
 
   return elements
+}
+
+// eslint-disable-next-line no-control-regex -- same set as stripIrcFormatting
+const STRIP_RE_SRC = /\x03\d{0,2}(?:,\d{0,2})?|[\x02\x1d\x1f\x1e\x16\x11\x0f]/gi
+
+// Word-wrap `text` at `maxWidth` visual columns.
+function wordWrap(text: string, maxWidth: number): string[] {
+  if (maxWidth <= 0 || text.length <= maxWidth) return [text]
+  const words = text.split(' ')
+  const lines: string[] = []
+  let current = ''
+  for (const word of words) {
+    if (!current) {
+      current = word
+    } else if (current.length + 1 + word.length <= maxWidth) {
+      current += ' ' + word
+    } else {
+      lines.push(current)
+      current = word
+    }
+  }
+  if (current) lines.push(current)
+  return lines.length > 0 ? lines : [text]
+}
+
+/**
+ * IRC-aware word wrap. Returns substrings of `content` (with IRC codes
+ * preserved) whose *visual* text fits within `maxWidth` characters —
+ * the same line-break positions as `wordWrap(stripIrcFormatting(content), maxWidth)`.
+ */
+export function ircWordWrap(content: string, maxWidth: number): string[] {
+  if (maxWidth <= 0) return [content]
+  const plain = stripIrcFormatting(content)
+  if (plain.length <= maxWidth) return [content]
+
+  const plainLines = wordWrap(plain, maxWidth)
+  if (plainLines.length <= 1) return [content]
+
+  // Build visToRaw: maps each visual-char index to its raw byte position in content.
+  const visToRaw: number[] = []
+  let rawIdx = 0
+  const re = new RegExp(STRIP_RE_SRC.source, 'gi')
+  while (rawIdx < content.length) {
+    re.lastIndex = rawIdx
+    const m = re.exec(content)
+    if (m && m.index === rawIdx) {
+      rawIdx += m[0].length
+    } else {
+      visToRaw.push(rawIdx)
+      rawIdx++
+    }
+  }
+
+  const result: string[] = []
+  let visOffset = 0
+  for (let i = 0; i < plainLines.length; i++) {
+    const lineLen = plainLines[i]!.length
+    const visEnd = visOffset + lineLen
+    // For the first line include any leading IRC codes (rawStart = 0).
+    // For subsequent lines start just after the separating space.
+    const rawStart = i === 0 ? 0 : visToRaw[visOffset - 1]! + 1
+    const rawEnd = visEnd < visToRaw.length ? visToRaw[visEnd]! : content.length
+    result.push(content.slice(rawStart, rawEnd))
+    visOffset = visEnd + 1 // +1 to skip the separating space
+  }
+
+  return result.length > 0 ? result : [content]
 }
