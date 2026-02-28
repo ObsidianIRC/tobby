@@ -145,9 +145,13 @@ export class CommandParser {
       aliases: ['server'],
       description: 'Connect to an IRC server',
       usage: '/connect <host> [port] [nickname]',
-      minArgs: 1,
+      minArgs: 0,
       maxArgs: 3,
       execute: async (args, ctx) => {
+        if (args.length === 0) {
+          await this.registry.execute('server.connect', ctx)
+          return { success: true }
+        }
         const [host, port = '6667', nickname] = args
         const serverErr = checkServerRestriction(host!)
         if (serverErr) return { success: false, message: serverErr }
@@ -170,12 +174,12 @@ export class CommandParser {
       aliases: ['j'],
       description: 'Join a channel',
       usage: '/join <#channel>',
-      minArgs: 1,
+      minArgs: 0,
       maxArgs: 1,
       execute: async (args, ctx) => {
         const [channel] = args
         await this.registry.execute('channel.join', ctx, channel)
-        return { success: true, message: `Joining ${channel}...` }
+        return { success: true, message: channel ? `Joining ${channel}...` : undefined }
       },
     })
 

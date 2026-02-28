@@ -131,6 +131,12 @@ export function MemberPane({ width, height, focused }: MemberPaneProps) {
                 <text>
                   {modeSymbol && <span fg={modeColor}>{modeSymbol}</span>}
                   <span fg={nicknameColor}>{displayName}</span>
+                  {user.account && (
+                    <span fg={THEME.accentGreen} bg="#1a3a1a">
+                      {' '}
+                      ✓{' '}
+                    </span>
+                  )}
                   {isAway && <span fg={THEME.dimText}> (away)</span>}
                 </text>
               </box>

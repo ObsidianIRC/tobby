@@ -437,6 +437,8 @@ export function CommandInput({ width }: CommandInputProps) {
 
   const prompt = getPrompt()
   const promptWidth = prompt.length
+  // 2 outer padding each side + 2 border chars + 1 inner paddingLeft = 7 fixed overhead
+  const textareaWidth = Math.max(10, width - 7 - promptWidth)
   const visibleLines = Math.min(inputLineCount, 5)
   const isFocused = !activeModal && !selectedMessage && !messageSearch
 
@@ -466,12 +468,12 @@ export function CommandInput({ width }: CommandInputProps) {
         </box>
         <textarea
           ref={textareaRef as React.RefObject<TextareaRenderable>}
+          width={textareaWidth}
           height={visibleLines}
           focused={isFocused}
           backgroundColor={THEME.backgroundElement}
           focusedBackgroundColor={THEME.backgroundElement}
           placeholder="Type a message or /command..."
-          flexGrow={1}
           onContentChange={() => {
             const lc = textareaRef.current?.lineCount ?? 1
             const txt = getText()

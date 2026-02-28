@@ -66,6 +66,7 @@ function MultilineMessageView({
   offset,
   isSelected,
   highlightQuery,
+  isAuthed,
 }: {
   msg: Message
   username: string
@@ -73,6 +74,7 @@ function MultilineMessageView({
   offset: number
   isSelected: boolean
   highlightQuery?: string
+  isAuthed?: boolean
 }) {
   const nicknameColor = getNicknameColor(username)
   const vLines = getVisibleLines(msg, isSelected)
@@ -84,7 +86,7 @@ function MultilineMessageView({
       <text>
         <span fg={THEME.dimText}>[{timestamp}]</span>
         <span fg={nicknameColor}> {username}</span>
-        <span fg={THEME.mutedText}> › </span>
+        <span fg={isAuthed ? THEME.accentGreen : THEME.mutedText}> › </span>
         {highlightQuery ? (
           <InlineHighlight text={firstLine} query={highlightQuery} baseFg={THEME.foreground} />
         ) : (
@@ -281,7 +283,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
   // but for a terminal app the re-render cost is negligible
   const channelUsernames = currentChannel?.users.map((u) => u.username) ?? []
 
-  const renderMessage = (msg: Message, highlightQuery?: string) => {
+  const renderMessage = (msg: Message, highlightQuery?: string, isAuthed = false) => {
     const { timestamp, username } = formatMessage(msg)
     const nicknameColor = getNicknameColor(username)
 
@@ -290,6 +292,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
         const offset = contentOffset(username)
         const plainContent = stripIrcFormatting(msg.content)
         const lines = wordWrap(plainContent, contentWidth(username))
+        const separatorColor = isAuthed ? THEME.accentGreen : THEME.mutedText
         if (lines.length > 1) {
           const rawLines = ircWordWrap(msg.content, contentWidth(username))
           const firstRawLine = rawLines[0] ?? ''
@@ -298,7 +301,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
               <text>
                 <span fg={THEME.dimText}>[{timestamp}]</span>
                 <span fg={nicknameColor}> {username}</span>
-                <span fg={THEME.mutedText}> › </span>
+                <span fg={separatorColor}> › </span>
                 {highlightQuery ? (
                   <InlineHighlight
                     text={lines[0] ?? ''}
@@ -336,7 +339,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
           <text>
             <span fg={THEME.dimText}>[{timestamp}]</span>
             <span fg={nicknameColor}> {username}</span>
-            <span fg={THEME.mutedText}> › </span>
+            <span fg={separatorColor}> › </span>
             {highlightQuery ? (
               <InlineHighlight
                 text={plainContent}
@@ -606,6 +609,10 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
           const isSelected = selectedMessage?.id === msg.id
           const isSelectable = SELECTABLE_TYPES.includes(msg.type)
           const { username } = formatMessage(msg)
+          const senderUser = currentChannel?.users.find(
+            (u) => (u.nickname ?? u.username) === username
+          )
+          const isAuthed = Boolean(senderUser?.account) || Boolean(msg.tags?.['account'])
           const offset = contentOffset(username)
           const isSearchMatch = messageSearch?.matchIds.includes(msg.id) ?? false
           const isCurrentMatch =
@@ -635,9 +642,14 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
                   offset={offset}
                   isSelected={isSelected || expandMultilines}
                   highlightQuery={isSearchMatch ? (messageSearch?.query ?? undefined) : undefined}
+                  isAuthed={isAuthed}
                 />
               ) : (
-                renderMessage(msg, isSearchMatch ? (messageSearch?.query ?? undefined) : undefined)
+                renderMessage(
+                  msg,
+                  isSearchMatch ? (messageSearch?.query ?? undefined) : undefined,
+                  isAuthed
+                )
               )}
               {isSelected && (
                 <box paddingLeft={offset} flexDirection="row">

@@ -19,6 +19,7 @@ export interface ServersSlice {
   loadPersistedServers: () => void
   reorderServer: (serverId: string, direction: 'up' | 'down') => void
   reorderChannel: (serverId: string, channelId: string, direction: 'up' | 'down') => void
+  updateUserAccount: (serverId: string, nick: string, account: string | undefined) => void
 }
 
 export const createServersSlice: StateCreator<AppStore, [], [], ServersSlice> = (set, get) => ({
@@ -224,6 +225,30 @@ export const createServersSlice: StateCreator<AppStore, [], [], ServersSlice> = 
     } catch (error) {
       debugLog?.('Failed to persist channel order:', error)
     }
+  },
+
+  updateUserAccount: (serverId, nick, account) => {
+    const lowerNick = nick.toLowerCase()
+    set((state) => ({
+      servers: state.servers.map((s) => {
+        if (s.id !== serverId) return s
+        return {
+          ...s,
+          channels: s.channels.map((c) => {
+            const hasUser = c.users.some(
+              (u) => (u.nickname ?? u.username).toLowerCase() === lowerNick
+            )
+            if (!hasUser) return c
+            return {
+              ...c,
+              users: c.users.map((u) =>
+                (u.nickname ?? u.username).toLowerCase() === lowerNick ? { ...u, account } : u
+              ),
+            }
+          }),
+        }
+      }),
+    }))
   },
 
   loadPersistedServers: () => {

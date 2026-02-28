@@ -406,6 +406,13 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
 
       addMessage(channel.id, message)
 
+      // account-tag: update sender's account status when the tag is present
+      const tagAccount = data.mtags?.['account']
+      if (tagAccount !== undefined) {
+        const { updateUserAccount } = get()
+        updateUserAccount(data.serverId, data.sender, tagAccount || undefined)
+      }
+
       if (message.msgid) {
         const pending = pendingHistoryReactions.get(message.msgid)
         if (pending?.length) {
@@ -726,6 +733,12 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
           )
         }
       }
+    })
+
+    // Account login/logout (account-notify)
+    ircClient.onAccount((data) => {
+      const { updateUserAccount } = get()
+      updateUserAccount(data.serverId, data.nick, data.account)
     })
 
     // Nick change

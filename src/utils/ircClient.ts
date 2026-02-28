@@ -15,6 +15,12 @@ export class IRCClient extends BaseIRCClient {
   private _lastMsgTime = new Map<string, Date>()
   // Callbacks invoked whenever a PONG is received for a given server (used for keepalive).
   private _pongCallbacks = new Map<string, () => void>()
+  // account-notify callbacks (ACCOUNT command — not part of ObsidianIRC's EventMap).
+  private _accountCallbacks: ((data: {
+    serverId: string
+    nick: string
+    account: string | undefined
+  }) => void)[] = []
 
   getLastMessageTime(serverId: string): Date {
     return this._lastMsgTime.get(serverId) ?? new Date()
@@ -26,6 +32,12 @@ export class IRCClient extends BaseIRCClient {
 
   offPong(serverId: string): void {
     this._pongCallbacks.delete(serverId)
+  }
+
+  onAccount(
+    cb: (data: { serverId: string; nick: string; account: string | undefined }) => void
+  ): void {
+    this._accountCallbacks.push(cb)
   }
 
   override sendRaw(serverId: string, command: string): void {
@@ -191,6 +203,18 @@ export class IRCClient extends BaseIRCClient {
           })
         } else if (command === 'PONG') {
           this._pongCallbacks.get(server.id)?.()
+        } else if (command === 'ACCOUNT') {
+          // account-notify: :nick!user@host ACCOUNT accountname|*
+          const nick = parts[0]?.slice(1).split('!')[0] ?? ''
+          const rawAccount = (parts[2] ?? '*').replace(/^:/, '')
+          const accountData = {
+            serverId: server.id,
+            nick,
+            account: rawAccount === '*' ? undefined : rawAccount,
+          }
+          for (const cb of this._accountCallbacks) {
+            cb(accountData)
+          }
         }
       }
     }
