@@ -5,7 +5,11 @@ globalThis.__APP_VERSION__ = '0.1.0-test'
 vi.mock('bun:sqlite', () => ({
   Database: class {
     run() {}
-    query() {
+    query(sql: string) {
+      // PRAGMA user_version must return a row (SQLite always does)
+      if (typeof sql === 'string' && sql.toLowerCase().includes('pragma user_version')) {
+        return { get: () => ({ user_version: 0 }), all: () => [] }
+      }
       return { get: () => null, all: () => [] }
     }
     close() {}

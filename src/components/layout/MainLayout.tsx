@@ -20,6 +20,7 @@ import { THEME } from '../../constants/theme'
 export function MainLayout() {
   const { width, height } = useTerminalDimensions()
   const showUserPane = useStore((state) => state.showUserPane)
+  const showServerPane = useStore((state) => state.showServerPane)
   const focusedPane = useStore((state) => state.focusedPane)
   const activeModal = useStore((state) => state.activeModal)
   const replyingTo = useStore((state) => state.replyingTo)
@@ -38,7 +39,7 @@ export function MainLayout() {
 
   const {
     innerWidth,
-    serverPaneWidth,
+    effectiveServerPaneWidth,
     memberPaneWidth,
     chatPaneWidth,
     contentHeight,
@@ -46,11 +47,21 @@ export function MainLayout() {
     effectiveShowUserPane,
   } = useMemo(() => {
     const innerWidth = width - 2
-    const autoHideMembers = width < 120
-    const effectiveShowUserPane = showUserPane && !autoHideMembers
-    const serverPaneWidth = width < 100 ? 18 : 25
+    // Auto-hide the member pane at narrow widths regardless of the toggle.
+    // The toggle only takes effect when there's enough room.
+    const effectiveShowUserPane = showUserPane && width >= 100
+    // Server pane shrinks progressively as the terminal narrows.
+    const effectiveServerPaneWidth = showServerPane
+      ? width >= 130
+        ? 22
+        : width >= 100
+          ? 18
+          : width >= 75
+            ? 14
+            : 12
+      : 0
     const memberPaneWidth = effectiveShowUserPane ? 20 : 0
-    const chatPaneWidth = innerWidth - serverPaneWidth - memberPaneWidth
+    const chatPaneWidth = innerWidth - effectiveServerPaneWidth - memberPaneWidth
     const commandInputHeight = 2 + Math.min(inputLineCount, 5) + (quitWarning ? 1 : 0)
     const typingIndicatorHeight = 1
     const statusBarHeight = 1
@@ -59,14 +70,14 @@ export function MainLayout() {
       height - 2 - commandInputHeight - typingIndicatorHeight - replyBarHeight - statusBarHeight
     return {
       innerWidth,
-      serverPaneWidth,
+      effectiveServerPaneWidth,
       memberPaneWidth,
       chatPaneWidth,
       contentHeight,
       statusBarHeight,
       effectiveShowUserPane,
     }
-  }, [width, height, showUserPane, inputLineCount, quitWarning, replyingTo])
+  }, [width, height, showUserPane, showServerPane, inputLineCount, quitWarning, replyingTo])
 
   const handleEmojiSelect = (emoji: string) => {
     if (!selectedMessage || !currentServer || !currentChannelId || !ircClient) {
@@ -109,11 +120,13 @@ export function MainLayout() {
         flexDirection="column"
       >
         <box flexDirection="row" height={contentHeight}>
-          <ServerPane
-            width={serverPaneWidth}
-            height={contentHeight}
-            focused={focusedPane === 'servers'}
-          />
+          {showServerPane && (
+            <ServerPane
+              width={effectiveServerPaneWidth}
+              height={contentHeight}
+              focused={focusedPane === 'servers'}
+            />
+          )}
 
           <ChatPane width={chatPaneWidth} height={contentHeight} focused={focusedPane === 'chat'} />
 

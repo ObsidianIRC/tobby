@@ -768,6 +768,45 @@ export class CommandParser {
     })
 
     this.register({
+      name: 'members',
+      aliases: ['users'],
+      description: 'Toggle the members list',
+      usage: '/members',
+      minArgs: 0,
+      maxArgs: 0,
+      execute: async (_, ctx) => {
+        await this.registry.execute('ui.toggleUserPane', ctx)
+        return { success: true }
+      },
+    })
+
+    this.register({
+      name: 'tree',
+      aliases: [],
+      description: 'Toggle the server list',
+      usage: '/tree',
+      minArgs: 0,
+      maxArgs: 0,
+      execute: async (_, ctx) => {
+        await this.registry.execute('ui.toggleServerPane', ctx)
+        return { success: true }
+      },
+    })
+
+    this.register({
+      name: 'timestamps',
+      aliases: ['ts'],
+      description: 'Toggle message timestamps',
+      usage: '/timestamps',
+      minArgs: 0,
+      maxArgs: 0,
+      execute: async (_, ctx) => {
+        await this.registry.execute('ui.toggleTimestamps', ctx)
+        return { success: true }
+      },
+    })
+
+    this.register({
       name: 'whisper',
       aliases: ['w'],
       description: 'Send an inline private whisper to a user in the current channel',

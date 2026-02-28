@@ -67,6 +67,7 @@ function MultilineMessageView({
   isSelected,
   highlightQuery,
   isAuthed,
+  showTimestamps,
 }: {
   msg: Message
   username: string
@@ -75,6 +76,7 @@ function MultilineMessageView({
   isSelected: boolean
   highlightQuery?: string
   isAuthed?: boolean
+  showTimestamps: boolean
 }) {
   const nicknameColor = getNicknameColor(username)
   const vLines = getVisibleLines(msg, isSelected)
@@ -84,8 +86,8 @@ function MultilineMessageView({
   return (
     <box flexDirection="column">
       <text>
-        <span fg={THEME.dimText}>[{timestamp}]</span>
-        <span fg={nicknameColor}> {username}</span>
+        {showTimestamps && <span fg={THEME.dimText}>[{timestamp}] </span>}
+        <span fg={nicknameColor}>{username}</span>
         <span fg={isAuthed ? THEME.accentGreen : THEME.mutedText}> › </span>
         {highlightQuery ? (
           <InlineHighlight text={firstLine} query={highlightQuery} baseFg={THEME.foreground} />
@@ -170,6 +172,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
   const expandMultilines = useStore((state) => state.expandMultilines)
   const messageSearch = useStore((state) => state.messageSearch)
 
+  const showTimestamps = useStore((state) => state.showTimestamps)
   const scrollBoxRef = useRef<ScrollBoxRenderable | null>(null)
 
   const currentServer = servers.find((s) => s.id === currentServerId)
@@ -299,7 +302,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
           return (
             <box flexDirection="column">
               <text>
-                <span fg={THEME.dimText}>[{timestamp}]</span>
+                {showTimestamps && <span fg={THEME.dimText}>[{timestamp}]</span>}
                 <span fg={nicknameColor}> {username}</span>
                 <span fg={separatorColor}> › </span>
                 {highlightQuery ? (
@@ -337,7 +340,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
         }
         return (
           <text>
-            <span fg={THEME.dimText}>[{timestamp}]</span>
+            {showTimestamps && <span fg={THEME.dimText}>[{timestamp}]</span>}
             <span fg={nicknameColor}> {username}</span>
             <span fg={separatorColor}> › </span>
             {highlightQuery ? (
@@ -364,7 +367,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
           return (
             <box flexDirection="column">
               <text>
-                <span fg={THEME.dimText}>[{timestamp}]</span>
+                {showTimestamps && <span fg={THEME.dimText}>[{timestamp}]</span>}
                 <span fg={COLORS.magenta}> * {username} </span>
                 {highlightQuery ? (
                   <InlineHighlight
@@ -401,7 +404,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
         }
         return (
           <text>
-            <span fg={THEME.dimText}>[{timestamp}]</span>
+            {showTimestamps && <span fg={THEME.dimText}>[{timestamp}]</span>}
             <span fg={COLORS.magenta}> * {username} </span>
             {highlightQuery ? (
               <InlineHighlight text={plainContent} query={highlightQuery} baseFg={COLORS.magenta} />
@@ -416,7 +419,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
       case 'notice':
         return (
           <text>
-            <span fg={THEME.dimText}>[{timestamp}]</span>
+            {showTimestamps && <span fg={THEME.dimText}>[{timestamp}]</span>}
             <span fg={COLORS.orange}> -{username}-</span>
             <span fg={COLORS.orange}> {msg.content}</span>
           </text>
@@ -424,7 +427,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
       case 'join':
         return (
           <text>
-            <span fg={THEME.dimText}>[{timestamp}]</span>
+            {showTimestamps && <span fg={THEME.dimText}>[{timestamp}]</span>}
             <span fg={COLORS.green}> → </span>
             <span fg={nicknameColor}>{username}</span>
             <span fg={COLORS.green}> joined</span>
@@ -433,7 +436,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
       case 'part':
         return (
           <text>
-            <span fg={THEME.dimText}>[{timestamp}]</span>
+            {showTimestamps && <span fg={THEME.dimText}>[{timestamp}]</span>}
             <span fg={COLORS.cyan}> ← </span>
             <span fg={nicknameColor}>{username}</span>
             <span fg={COLORS.cyan}> left</span>
@@ -443,7 +446,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
       case 'quit':
         return (
           <text>
-            <span fg={THEME.dimText}>[{timestamp}]</span>
+            {showTimestamps && <span fg={THEME.dimText}>[{timestamp}]</span>}
             <span fg={COLORS.red}> ← </span>
             <span fg={nicknameColor}>{username}</span>
             <span fg={COLORS.red}> quit</span>
@@ -453,7 +456,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
       case 'kick':
         return (
           <text>
-            <span fg={THEME.dimText}>[{timestamp}]</span>
+            {showTimestamps && <span fg={THEME.dimText}>[{timestamp}]</span>}
             <span fg={COLORS.red}> ⚠ </span>
             <span fg={nicknameColor}>{username}</span>
             <span fg={COLORS.red}> was kicked</span>
@@ -463,7 +466,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
       case 'nick':
         return (
           <text>
-            <span fg={THEME.dimText}>[{timestamp}]</span>
+            {showTimestamps && <span fg={THEME.dimText}>[{timestamp}]</span>}
             <span fg={COLORS.yellow}> ⟲ </span>
             <span fg={nicknameColor}>{username}</span>
             <span fg={COLORS.yellow}> → </span>
@@ -473,7 +476,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
       case 'mode':
         return (
           <text>
-            <span fg={THEME.dimText}>[{timestamp}]</span>
+            {showTimestamps && <span fg={THEME.dimText}>[{timestamp}]</span>}
             <span fg={COLORS.blue}> ⚙ Mode: </span>
             <span fg={THEME.foreground}>{msg.content}</span>
           </text>
@@ -481,7 +484,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
       case 'whisper':
         return (
           <text>
-            <span fg={THEME.dimText}>[{timestamp}]</span>
+            {showTimestamps && <span fg={THEME.dimText}>[{timestamp}]</span>}
             <span fg={COLORS.magenta}> ✉ </span>
             <span fg={getNicknameColor(username)}>{username}</span>
             <span fg={COLORS.magenta}> › </span>
@@ -491,7 +494,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
       case 'invite':
         return (
           <text>
-            <span fg={THEME.dimText}>[{timestamp}]</span>
+            {showTimestamps && <span fg={THEME.dimText}>[{timestamp}]</span>}
             <span fg={COLORS.cyan}> ⟶ </span>
             <span fg={getNicknameColor(username)}>{username}</span>
             <span fg={COLORS.cyan}> invited you to join </span>
@@ -501,14 +504,14 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
       case 'system':
         return (
           <text>
-            <span fg={THEME.dimText}>[{timestamp}]</span>
+            {showTimestamps && <span fg={THEME.dimText}>[{timestamp}]</span>}
             <span fg={THEME.mutedText}> • {msg.content}</span>
           </text>
         )
       default:
         return (
           <text>
-            <span fg={THEME.dimText}>[{timestamp}]</span>
+            {showTimestamps && <span fg={THEME.dimText}>[{timestamp}]</span>}
             <span fg={THEME.foreground}> {msg.content}</span>
           </text>
         )
@@ -643,6 +646,7 @@ export function ChatPane({ width, height, focused }: ChatPaneProps) {
                   isSelected={isSelected || expandMultilines}
                   highlightQuery={isSearchMatch ? (messageSearch?.query ?? undefined) : undefined}
                   isAuthed={isAuthed}
+                  showTimestamps={showTimestamps}
                 />
               ) : (
                 renderMessage(

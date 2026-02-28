@@ -27,6 +27,12 @@ interface PersistedChannel {
   created_at: number
 }
 
+interface PersistedUIState {
+  showServerPane: boolean
+  showUserPane: boolean
+  showTimestamps: boolean
+}
+
 let _customDbPath: string | null = null
 
 export function setDatabasePath(p: string): void {
@@ -43,10 +49,34 @@ class DatabaseService {
   }
 
   private initialize() {
-    // Enable foreign keys
     this.db.run('PRAGMA foreign_keys = ON')
 
-    // Create tables
+    // ─── Schema version policy (stored in PRAGMA user_version) ───────────────
+    // Encoding: MAJOR * 100 + MINOR  (e.g. v1.1 = 101)
+    //
+    // Minor versions (same MAJOR) are always backwards-compatible:
+    //   only additive changes (new tables, new nullable/default columns).
+    //   An old app can read a newer-minor DB safely.
+    //
+    // Major version bumps are BREAKING — an old app cannot correctly read
+    //   a DB created by a newer major version and must refuse to open it.
+    // ─────────────────────────────────────────────────────────────────────────
+    const SCHEMA_VERSION = 101 // v1.1
+
+    const rawVersion = this.db.query('PRAGMA user_version').get() as { user_version: number }
+    // treat 0 as v1.0 baseline (pre-versioning databases)
+    const dbVersion = rawVersion.user_version === 0 ? 100 : rawVersion.user_version
+
+    const schemaMajor = Math.floor(SCHEMA_VERSION / 100)
+    const dbMajor = Math.floor(dbVersion / 100)
+    if (dbMajor > schemaMajor) {
+      throw new Error(
+        `Database was created by a newer version of tobby (DB schema v${dbMajor}.x). ` +
+          `Please upgrade tobby to continue.`
+      )
+    }
+
+    // Baseline tables (always created idempotently)
     this.db.run(`
       CREATE TABLE IF NOT EXISTS servers (
         id TEXT PRIMARY KEY,
@@ -79,7 +109,7 @@ class DatabaseService {
       )
     `)
 
-    // Migrations for existing databases — ignore if column already exists
+    // Keep sort_order try-catch migrations for pre-v1.0 databases that may lack the column
     try {
       this.db.run('ALTER TABLE servers ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0')
     } catch {
@@ -101,7 +131,6 @@ class DatabaseService {
       )
     `)
 
-    // Create indexes for performance
     this.db.run(`
       CREATE INDEX IF NOT EXISTS idx_channels_server_id
       ON channels(server_id)
@@ -110,6 +139,33 @@ class DatabaseService {
     this.db.run(`
       CREATE INDEX IF NOT EXISTS idx_servers_auto_connect
       ON servers(auto_connect)
+    `)
+
+    this.runMigrations(dbVersion, SCHEMA_VERSION)
+  }
+
+  private runMigrations(from: number, to: number) {
+    const migrations: Array<[number, () => void]> = [
+      [101, () => this.migrate_101()],
+      // Future: [102, () => this.migrate_102()], ...
+    ]
+    for (const [version, run] of migrations) {
+      if (from < version && version <= to) {
+        run()
+        this.db.run(`PRAGMA user_version = ${version}`)
+      }
+    }
+  }
+
+  // v1.1 — adds ui_state for persisting UI toggle preferences (MINOR: backwards-compatible)
+  private migrate_101() {
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS ui_state (
+        id INTEGER PRIMARY KEY CHECK(id = 1),
+        show_server_pane INTEGER NOT NULL DEFAULT 1,
+        show_user_pane   INTEGER NOT NULL DEFAULT 1,
+        show_timestamps  INTEGER NOT NULL DEFAULT 1
+      )
     `)
   }
 
@@ -254,6 +310,25 @@ class DatabaseService {
 
   getServerState(serverId: string): any {
     return this.db.query('SELECT * FROM server_state WHERE server_id = ?').get(serverId)
+  }
+
+  // UI state methods
+  getUIState(): PersistedUIState | null {
+    const row = this.db.query('SELECT * FROM ui_state WHERE id = 1').get() as any
+    if (!row) return null
+    return {
+      showServerPane: Boolean(row.show_server_pane),
+      showUserPane: Boolean(row.show_user_pane),
+      showTimestamps: Boolean(row.show_timestamps),
+    }
+  }
+
+  saveUIState(state: PersistedUIState): void {
+    this.db.run(
+      `INSERT OR REPLACE INTO ui_state(id, show_server_pane, show_user_pane, show_timestamps)
+       VALUES(1, ?, ?, ?)`,
+      [state.showServerPane ? 1 : 0, state.showUserPane ? 1 : 0, state.showTimestamps ? 1 : 0]
+    )
   }
 
   // Utility methods

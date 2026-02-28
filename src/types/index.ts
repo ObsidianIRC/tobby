@@ -124,6 +124,7 @@ export interface UIState {
   focusedChannel: string | null
   showServerPane: boolean
   showUserPane: boolean
+  showTimestamps: boolean
   selectedMessage: Message | null
   replyingTo: Message | null
   terminalWidth: number

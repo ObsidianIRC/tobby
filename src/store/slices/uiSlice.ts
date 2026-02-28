@@ -1,6 +1,7 @@
 import type { Message, UIState } from '@/types'
 import type { StateCreator } from 'zustand'
 import type { AppStore } from '@/store'
+import { getDatabase } from '@/services/database'
 
 export interface UISlice extends UIState {
   openModal: (modalId: string) => void
@@ -9,6 +10,8 @@ export interface UISlice extends UIState {
   setFocusedChannel: (channelId: string | null) => void
   toggleServerPane: () => void
   toggleUserPane: () => void
+  toggleShowTimestamps: () => void
+  loadPersistedUIState: () => void
   setSelectedMessage: (message: Message | null) => void
   setReplyingTo: (message: Message | null) => void
   setTerminalDimensions: (width: number, height: number) => void
@@ -27,6 +30,7 @@ export const createUISlice: StateCreator<AppStore, [], [], UISlice> = (set, get)
   focusedChannel: null,
   showServerPane: true,
   showUserPane: true,
+  showTimestamps: true,
   selectedMessage: null,
   replyingTo: null,
   quitWarning: null,
@@ -43,8 +47,25 @@ export const createUISlice: StateCreator<AppStore, [], [], UISlice> = (set, get)
   closeModal: () => set({ activeModal: null }),
   setFocusedPane: (pane) => set({ focusedPane: pane }),
   setFocusedChannel: (channelId) => set({ focusedChannel: channelId }),
-  toggleServerPane: () => set((state) => ({ showServerPane: !state.showServerPane })),
-  toggleUserPane: () => set((state) => ({ showUserPane: !state.showUserPane })),
+  toggleServerPane: () => {
+    set((state) => ({ showServerPane: !state.showServerPane }))
+    const { showServerPane, showUserPane, showTimestamps } = get()
+    getDatabase().saveUIState({ showServerPane, showUserPane, showTimestamps })
+  },
+  toggleUserPane: () => {
+    set((state) => ({ showUserPane: !state.showUserPane }))
+    const { showServerPane, showUserPane, showTimestamps } = get()
+    getDatabase().saveUIState({ showServerPane, showUserPane, showTimestamps })
+  },
+  toggleShowTimestamps: () => {
+    set((state) => ({ showTimestamps: !state.showTimestamps }))
+    const { showServerPane, showUserPane, showTimestamps } = get()
+    getDatabase().saveUIState({ showServerPane, showUserPane, showTimestamps })
+  },
+  loadPersistedUIState: () => {
+    const saved = getDatabase().getUIState()
+    if (saved) set(saved)
+  },
   setSelectedMessage: (message) =>
     set(
       message === null
