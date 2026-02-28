@@ -18,7 +18,7 @@
   "scripts": {
     "dev": "bun run src/index.tsx",
     "start": "bun run dist/index.js",
-    "build": "bun build src/index.tsx --outdir dist --target bun --minify --external '@opentui/core' --external '@opentui/react' --external 'react'",
+    "build": "bun run scripts/build.ts",
     "test": "vitest",
     "test:coverage": "vitest --coverage",
     "test:ui": "vitest --ui",

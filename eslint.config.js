@@ -32,6 +32,7 @@ export default [
         globalThis: 'readonly',
         crypto: 'readonly',
         debugLog: 'readonly',
+        __GIT_COMMIT__: 'readonly',
         URL: 'readonly',
         React: 'readonly',
         Timer: 'readonly',

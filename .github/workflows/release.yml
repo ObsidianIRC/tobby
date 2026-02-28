@@ -66,10 +66,14 @@ jobs:
       - name: Build binary
         shell: bash
         run: |
+          GIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+          VERSION=$(node -e "process.stdout.write(require('./package.json').version)")
           bun build src/index.tsx \
             --compile \
             --minify \
             --target=${{ matrix.target }} \
+            --define "__GIT_COMMIT__=\"$GIT\"" \
+            --define "__APP_VERSION__=\"$VERSION\"" \
             --outfile ${{ matrix.artifact }}
 
       # gzexe is only available on Linux; macOS and Windows get the raw binary

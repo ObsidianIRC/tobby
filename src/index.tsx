@@ -7,9 +7,12 @@ import { resolveDatabasePath } from './utils/paths'
 import { setDatabasePath } from './services/database'
 import { bootstrapServer } from './utils/bootstrapServer'
 import { setRestrictions } from './utils/restrictions'
+import pkg from '../package.json'
 
 declare global {
   var __APP_VERSION__: string
+  // Injected at build time via --define; undefined in dev mode (runtime fallback used instead).
+  var __GIT_COMMIT__: string | undefined
   var debugLog: ((...args: any[]) => void) | undefined
   // Set when --setup flag is given; tells App to open the connect modal on launch.
   var __SETUP_MODE__: boolean
@@ -128,6 +131,7 @@ Options:
                      are permitted (server may append them on collision).
 
   --debug            Write a debug log to tobby-debug.log.
+  --version, -v      Print version and exit.
   --help, -h         Show this help and exit.
 
 Examples:
@@ -139,6 +143,26 @@ Examples:
   tobby --server irc.libera.chat --nick me --channel '#linux' --channel '#bots'
 `.trimStart()
   )
+  process.exit(0)
+}
+
+if (argv.includes('--version') || argv.includes('-v')) {
+  // In built binaries __GIT_COMMIT__ is replaced by --define at compile time.
+  // In dev mode (bun run src/index.tsx) fall back to a runtime git call.
+  let gitHash: string
+  if (typeof __GIT_COMMIT__ !== 'undefined') {
+    gitHash = __GIT_COMMIT__
+  } else {
+    try {
+      const r = Bun.spawnSync(['git', 'rev-parse', '--short', 'HEAD'], {
+        cwd: new URL('..', import.meta.url).pathname,
+      })
+      gitHash = r.success ? r.stdout.toString().trim() : 'unknown'
+    } catch {
+      gitHash = 'unknown'
+    }
+  }
+  console.log(`tobby ${pkg.version} (${gitHash})`)
   process.exit(0)
 }
 
