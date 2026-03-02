@@ -363,7 +363,17 @@ export function CommandInput({ width }: CommandInputProps) {
 
     if (key.name === 'tab') {
       key.preventDefault()
-      const users = currentChannel?.users ?? []
+      const users =
+        currentChannel?.users ??
+        (currentPrivateChat
+          ? [
+              {
+                id: currentPrivateChat.username,
+                username: currentPrivateChat.username,
+                isOnline: true,
+              },
+            ]
+          : [])
       const channels = currentServer?.channels ?? []
       const result = handleTabCompletion(getText(), {
         users,
