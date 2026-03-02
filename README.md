@@ -15,6 +15,11 @@
 # Arch Linux (no dependencies):
 yay -S tobby-bin
 
+# Nix (any platform):
+nix run github:ObsidianIRC/tobby
+# or install permanently:
+nix profile install github:ObsidianIRC/tobby
+
 # npm (requires Bun):
 npm install -g @mattfillipe/tobby
 

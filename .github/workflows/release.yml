@@ -87,6 +87,36 @@ jobs:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
 
+  # ── Update flake.nix with new version + hash ────────────────────────────────
+  update-flake:
+    needs: publish-npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Patch flake.nix
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          URL="https://registry.npmjs.org/@mattfillipe/tobby/-/tobby-${VERSION}.tgz"
+          SRI=$(curl -fSL --retry 5 --retry-delay 15 "$URL" \
+            | python3 -c "import hashlib,base64,sys; d=sys.stdin.buffer.read(); print('sha256-'+base64.b64encode(hashlib.sha256(d).digest()).decode())")
+          sed -i "s|version = \"[^\"]*\"; # @nix-version|version = \"${VERSION}\"; # @nix-version|" flake.nix
+          sed -i "s|hash = \"[^\"]*\"; # @nix-hash|hash = \"${SRI}\"; # @nix-hash|" flake.nix
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add flake.nix
+          git diff --cached --quiet || git commit -m "nix: bump to ${{ github.ref_name }}"
+          git push
+
   # ── Create GitHub release with all binaries ─────────────────────────────────
   create-release:
     needs: publish-binaries
