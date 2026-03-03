@@ -11,10 +11,10 @@
       let
         pkgs = import nixpkgs { inherit system; };
         pname = "tobby";
-        version = "0.2.1"; # @nix-version
+        version = "0.2.3"; # @nix-version
         src = pkgs.fetchurl {
           url = "https://registry.npmjs.org/@mattfillipe/tobby/-/tobby-${version}.tgz";
-          hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="; # @nix-hash
+          hash = "sha256-HkwjADHgMu4/0FIMDNCLO3uqmlHrirtZCkpvDgvSAyo="; # @nix-hash
         };
       in
       {
