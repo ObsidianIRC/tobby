@@ -33,6 +33,9 @@ const typingTimers = new Map<string, ReturnType<typeof setTimeout>>()
 // Servers for which auto-reconnect is suppressed (explicit user disconnect).
 export const noAutoReconnectServers = new Set<string>()
 
+// Tracks which server connections have advertised WHOX in ISUPPORT (005)
+const whoxServers = new Set<string>()
+
 interface KeepaliveState {
   pingInterval: ReturnType<typeof setInterval> | null
   pongTimeout: ReturnType<typeof setTimeout> | null
@@ -276,6 +279,10 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
     })
     ircClient.on('WHOIS_END', (data: EventMap['WHOIS_END']) => {
       addWhoisLine(data.serverId, `[whois] End of WHOIS for ${data.nick}`)
+    })
+
+    ircClient.on('ISUPPORT', (data: EventMap['ISUPPORT']) => {
+      if (data.key === 'WHOX') whoxServers.add(data.serverId)
     })
 
     // Sync negotiated capabilities to store and kick off SASL if needed
@@ -624,6 +631,10 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
         if (data.username === server.nickname) {
           // Real self-join: clear users so the incoming 353/NAMES events populate it cleanly
           updateChannel(data.serverId, channel.id, { users: [] })
+          // Backfill accounts for all members via WHOX (once per join, if supported)
+          if (whoxServers.has(data.serverId)) {
+            ircClient.sendRaw(data.serverId, `WHO ${data.channelName} %cuhnfaro`)
+          }
         } else {
           const user: User = {
             id: uuidv4(),
@@ -739,6 +750,15 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
     ircClient.onAccount((data) => {
       const { updateUserAccount } = get()
       updateUserAccount(data.serverId, data.nick, data.account)
+    })
+
+    // Backfill account fields from WHOX (354) replies
+    ircClient.on('WHOX_REPLY', (data: EventMap['WHOX_REPLY']) => {
+      const { updateUserAccount } = get()
+      // '*' = not identified (standard), '0' = not identified (Ergo/some servers)
+      const account =
+        data.account === '*' || data.account === '0' ? undefined : data.account || undefined
+      updateUserAccount(data.serverId, data.nick, account)
     })
 
     // Nick change

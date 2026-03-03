@@ -392,8 +392,8 @@ export function CommandInput({ width }: CommandInputProps) {
       return
     }
 
-    // History navigation only when textarea is single-line
-    if (key.name === 'up' && inputLineCount === 1) {
+    // History navigation only when textarea is single-line and no modal is open
+    if (key.name === 'up' && inputLineCount === 1 && !activeModal) {
       key.preventDefault()
       if (commandHistory.length > 0) {
         const newIndex =
@@ -407,7 +407,7 @@ export function CommandInput({ width }: CommandInputProps) {
       return
     }
 
-    if (key.name === 'down' && inputLineCount === 1) {
+    if (key.name === 'down' && inputLineCount === 1 && !activeModal) {
       key.preventDefault()
       if (historyIndex !== -1) {
         const newIndex = historyIndex + 1

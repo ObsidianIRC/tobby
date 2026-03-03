@@ -267,7 +267,7 @@ setRestrictions({ server: parsed.restrictServer, nick: parsed.restrictUser })
 
 let stdinPassphrase: string | undefined
 if (parsed.stdinEncKey) {
-  const rl = createInterface({ input: process.stdin, crlfDelay: Infinity })
+  const rl = createInterface({ input: process.stdin, output: null, crlfDelay: Infinity })
   stdinPassphrase = await new Promise<string>((resolve) =>
     rl.once('line', (line) => {
       rl.close()
