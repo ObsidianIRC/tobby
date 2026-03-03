@@ -408,6 +408,7 @@ export function QuickActionsMenu({ width, height }: QuickActionsMenuProps) {
               paddingLeft={2}
               paddingRight={2}
               backgroundColor={index === selectedIndex ? THEME.selectedBackground : undefined}
+              onMouseDown={() => handleSelect(item)}
             >
               <box flexDirection="row" gap={1}>
                 <text fg={item.fg ?? (index === selectedIndex ? THEME.accent : THEME.foreground)}>

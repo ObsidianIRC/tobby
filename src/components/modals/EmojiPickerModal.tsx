@@ -193,6 +193,7 @@ export function EmojiPickerModal({ width, height, onEmojiSelect }: EmojiPickerMo
                   backgroundColor={selBg ?? '#2a1515'}
                   flexDirection="row"
                   justifyContent="space-between"
+                  onMouseDown={() => handleSelect(entry)}
                 >
                   <text fg={isSelected ? THEME.accent : THEME.foreground}>
                     {entry.char} {entry.name.replace(/_/g, ' ')}
@@ -213,6 +214,7 @@ export function EmojiPickerModal({ width, height, onEmojiSelect }: EmojiPickerMo
                   backgroundColor={selBg ?? '#152215'}
                   flexDirection="row"
                   justifyContent="space-between"
+                  onMouseDown={() => handleSelect(entry)}
                 >
                   <text fg={isSelected ? THEME.accent : THEME.foreground}>
                     {entry.char} {entry.name.replace(/_/g, ' ')}
@@ -225,7 +227,13 @@ export function EmojiPickerModal({ width, height, onEmojiSelect }: EmojiPickerMo
             }
 
             return (
-              <box key={entry.char} paddingLeft={2} paddingRight={2} backgroundColor={selBg}>
+              <box
+                key={entry.char}
+                paddingLeft={2}
+                paddingRight={2}
+                backgroundColor={selBg}
+                onMouseDown={() => handleSelect(entry)}
+              >
                 <text fg={isSelected ? THEME.accent : THEME.foreground}>
                   {entry.char} {entry.name.replace(/_/g, ' ')}
                 </text>

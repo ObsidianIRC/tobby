@@ -175,6 +175,7 @@ export function ListModal({
               paddingLeft={2}
               paddingRight={2}
               backgroundColor={index === selectedIndex ? THEME.selectedBackground : undefined}
+              onMouseDown={() => onSelect(item)}
             >
               <box flexDirection="row" gap={1}>
                 {item.icon && <text fg={THEME.mutedText}>{item.icon}</text>}

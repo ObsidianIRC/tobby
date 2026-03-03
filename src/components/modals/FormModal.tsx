@@ -183,7 +183,12 @@ export function FormModal({
         paddingTop={1}
       >
         {fields.map((field, index) => (
-          <box key={field.key} flexDirection="column" marginBottom={1}>
+          <box
+            key={field.key}
+            flexDirection="column"
+            marginBottom={1}
+            onMouseDown={!field.readOnly ? () => setFocusedField(index) : undefined}
+          >
             <text>
               <span fg={field.readOnly ? THEME.dimText : THEME.foreground}>{field.label}:</span>
             </text>

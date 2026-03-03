@@ -223,6 +223,7 @@ export function ChannelBrowserModal({ width, height }: ChannelBrowserModalProps)
                 backgroundColor={isSelected ? THEME.selectedBackground : undefined}
                 flexDirection="row"
                 justifyContent="space-between"
+                onMouseDown={() => handleSelect(entry)}
               >
                 <text>
                   <span
