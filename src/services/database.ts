@@ -61,7 +61,7 @@ class DatabaseService {
     // Major version bumps are BREAKING — an old app cannot correctly read
     //   a DB created by a newer major version and must refuse to open it.
     // ─────────────────────────────────────────────────────────────────────────
-    const SCHEMA_VERSION = 101 // v1.1
+    const SCHEMA_VERSION = 102 // v1.2
 
     const rawVersion = this.db.query('PRAGMA user_version').get() as { user_version: number }
     // treat 0 as v1.0 baseline (pre-versioning databases)
@@ -147,7 +147,7 @@ class DatabaseService {
   private runMigrations(from: number, to: number) {
     const migrations: Array<[number, () => void]> = [
       [101, () => this.migrate_101()],
-      // Future: [102, () => this.migrate_102()], ...
+      [102, () => this.migrate_102()],
     ]
     for (const [version, run] of migrations) {
       if (from < version && version <= to) {
@@ -167,6 +167,11 @@ class DatabaseService {
         show_timestamps  INTEGER NOT NULL DEFAULT 1
       )
     `)
+  }
+
+  // v1.2 — passwords may now be AES-256-GCM encrypted with $tobby1$ prefix (MINOR: backwards-compatible)
+  private migrate_102() {
+    // No schema changes; version bump documents encrypted credential support
   }
 
   private nextServerSortOrder(): number {

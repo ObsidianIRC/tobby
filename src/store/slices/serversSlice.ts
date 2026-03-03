@@ -1,6 +1,7 @@
 import type { Channel, PrivateChat, Server } from '@/types'
 import type { StateCreator } from 'zustand'
 import { getDatabase } from '../../services/database'
+import { keyManager } from '../../services/keyManager'
 import type { AppStore } from '@/store'
 
 export interface ServersSlice {
@@ -17,6 +18,7 @@ export interface ServersSlice {
   updatePrivateChat: (serverId: string, chatId: string, updates: Partial<PrivateChat>) => void
   removePrivateChat: (serverId: string, chatId: string) => void
   loadPersistedServers: () => void
+  migratePasswords: () => void
   reorderServer: (serverId: string, direction: 'up' | 'down') => void
   reorderChannel: (serverId: string, channelId: string, direction: 'up' | 'down') => void
   updateUserAccount: (serverId: string, nick: string, account: string | undefined) => void
@@ -33,7 +35,17 @@ export const createServersSlice: StateCreator<AppStore, [], [], ServersSlice> = 
     if (persist) {
       try {
         const db = getDatabase()
-        db.saveServer(server)
+        // Encrypt a copy before persisting; in-memory state keeps plaintext
+        const toPersist = keyManager.isAvailable()
+          ? {
+              ...server,
+              password: server.password ? keyManager.encrypt(server.password) : server.password,
+              saslPassword: server.saslPassword
+                ? keyManager.encrypt(server.saslPassword)
+                : server.saslPassword,
+            }
+          : server
+        db.saveServer(toPersist)
       } catch (error) {
         debugLog?.('Failed to persist server:', error)
       }
@@ -53,10 +65,22 @@ export const createServersSlice: StateCreator<AppStore, [], [], ServersSlice> = 
         connectionState,
         channels: _ch,
         privateChats: _pc,
-        ...dbUpdates
+        saslPassword,
+        saslUsername,
+        ...rest
       } = updates as any
+      const dbUpdates: Record<string, unknown> = { ...rest }
+      // Remap camelCase fields to their snake_case column names
+      if (saslUsername !== undefined) dbUpdates.sasl_account = saslUsername
+      if (saslPassword !== undefined) {
+        dbUpdates.sasl_password =
+          keyManager.isAvailable() && saslPassword ? keyManager.encrypt(saslPassword) : saslPassword
+      }
+      if (dbUpdates.password !== undefined && keyManager.isAvailable() && dbUpdates.password) {
+        dbUpdates.password = keyManager.encrypt(dbUpdates.password as string)
+      }
       if (Object.keys(dbUpdates).length > 0) {
-        db.updateServer(id, dbUpdates)
+        db.updateServer(id, dbUpdates as any)
       }
       if (connectionState) {
         db.saveServerState(id, { connectionState })
@@ -182,6 +206,19 @@ export const createServersSlice: StateCreator<AppStore, [], [], ServersSlice> = 
       ),
     })),
 
+  migratePasswords: () => {
+    const { servers, updateServer } = get()
+    if (!keyManager.isAvailable()) return
+    for (const s of servers) {
+      const needsMigration =
+        (s.password && !s.password.startsWith('$tobby1$')) ||
+        (s.saslPassword && !s.saslPassword.startsWith('$tobby1$'))
+      if (needsMigration) {
+        updateServer(s.id, { password: s.password, saslPassword: s.saslPassword })
+      }
+    }
+  },
+
   reorderServer: (serverId, direction) => {
     const servers = get().servers
     const idx = servers.findIndex((s) => s.id === serverId)
@@ -269,6 +306,20 @@ export const createServersSlice: StateCreator<AppStore, [], [], ServersSlice> = 
           isMentioned: false,
         }))
 
+        let password: string | undefined
+        let saslPassword: string | undefined
+        try {
+          password = ps.password ? keyManager.decrypt(ps.password) : undefined
+        } catch {
+          // Decryption failed (key mismatch); user will need to re-enter
+          password = undefined
+        }
+        try {
+          saslPassword = ps.sasl_password ? keyManager.decrypt(ps.sasl_password) : undefined
+        } catch {
+          saslPassword = undefined
+        }
+
         return {
           id: ps.id,
           name: ps.name,
@@ -278,9 +329,9 @@ export const createServersSlice: StateCreator<AppStore, [], [], ServersSlice> = 
           nickname: ps.nickname,
           username: ps.username || undefined,
           realname: ps.realname || undefined,
-          password: ps.password || undefined,
+          password,
           saslUsername: ps.sasl_account || undefined,
-          saslPassword: ps.sasl_password || undefined,
+          saslPassword,
           connectionState: 'disconnected' as const,
           channels,
           privateChats: [],

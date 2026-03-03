@@ -7,7 +7,7 @@ describe('DB migrations', () => {
     vi.resetModules()
   })
 
-  it('fresh DB initializes to user_version 101 and ui_state is readable', async () => {
+  it('fresh DB initializes to user_version 102 and ui_state is readable', async () => {
     // Track PRAGMA user_version state across run() and query() calls
     let storedVersion = 0
     const ranSqls: string[] = []
@@ -40,8 +40,8 @@ describe('DB migrations', () => {
     closeDatabase()
     const db = getDatabase()
 
-    // Migration 101 should have been applied
-    expect(storedVersion).toBe(101)
+    // Migration 102 should have been applied
+    expect(storedVersion).toBe(102)
 
     // ui_state table should be readable
     const uiState = db.getUIState()
@@ -53,7 +53,7 @@ describe('DB migrations', () => {
     closeDatabase()
   })
 
-  it('DB at v1.0 (user_version=100) is migrated to 101', async () => {
+  it('DB at v1.0 (user_version=100) is migrated to 102', async () => {
     let storedVersion = 100
 
     vi.doMock('bun:sqlite', () => ({
@@ -77,7 +77,7 @@ describe('DB migrations', () => {
     closeDatabase()
     getDatabase()
 
-    expect(storedVersion).toBe(101)
+    expect(storedVersion).toBe(102)
     closeDatabase()
   })
 

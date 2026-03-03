@@ -16,6 +16,7 @@ export function App() {
   const ircClient = useStore((state) => state.ircClient)
   const initializeIRC = useStore((state) => state.initializeIRC)
   const loadPersistedServers = useStore((state) => state.loadPersistedServers)
+  const migratePasswords = useStore((state) => state.migratePasswords)
   const loadPersistedUIState = useStore((state) => state.loadPersistedUIState)
   const servers = useStore((state) => state.servers)
   const hasAutoConnected = useRef(false)
@@ -25,13 +26,14 @@ export function App() {
   useEffect(() => {
     debugLog?.('App mounted, loading persisted servers and initializing IRC')
     loadPersistedServers()
+    migratePasswords()
     loadPersistedUIState()
     initializeIRC()
     // --setup: open the connect modal so the user can fill in server details
     if (globalThis.__SETUP_MODE__) {
       setTimeout(() => useStore.getState().openModal('connect'), 50)
     }
-  }, [initializeIRC, loadPersistedServers, loadPersistedUIState])
+  }, [initializeIRC, loadPersistedServers, loadPersistedUIState, migratePasswords])
 
   // Auto-connect to servers after they're loaded and IRC is initialized.
   // Skipped in --setup mode — connection happens after the modal is submitted.

@@ -3,8 +3,10 @@ import { createRoot } from '@opentui/react'
 import { App } from './App'
 import fs from 'node:fs'
 import os from 'node:os'
+import { createInterface } from 'node:readline'
 import { resolveDatabasePath } from './utils/paths'
 import { setDatabasePath } from './services/database'
+import { keyManager } from './services/keyManager'
 import { bootstrapServer } from './utils/bootstrapServer'
 import { setRestrictions } from './utils/restrictions'
 import pkg from '../package.json'
@@ -16,6 +18,8 @@ declare global {
   var debugLog: ((...args: any[]) => void) | undefined
   // Set when --setup flag is given; tells App to open the connect modal on launch.
   var __SETUP_MODE__: boolean
+  // Set when keyring is unavailable; surfaced by the UI as a warning.
+  var __ENCRYPTION_WARNING__: string | undefined
   // CLI-provided prefill values forwarded to the connect modal.
   var __CLI_PREFILL__:
     | { host?: string; port?: number; nick?: string; ssl?: boolean; channels?: string[] }
@@ -130,6 +134,10 @@ Options:
                      Only allow using the given nickname. Trailing underscores
                      are permitted (server may append them on collision).
 
+  --stdin-enc-key    Read one line from stdin as the encryption passphrase
+                     instead of using the OS keyring. Useful for headless
+                     environments: echo "passphrase" | tobby --stdin-enc-key
+
   --debug            Write a debug log to tobby-debug.log.
   --version, -v      Print version and exit.
   --help, -h         Show this help and exit.
@@ -178,6 +186,7 @@ interface ParsedArgs {
   setupIfNotConfigured: boolean
   restrictServer?: string
   restrictUser?: string
+  stdinEncKey: boolean
 }
 
 function parseArgs(args: string[]): ParsedArgs {
@@ -187,6 +196,7 @@ function parseArgs(args: string[]): ParsedArgs {
     debug: false,
     setup: false,
     setupIfNotConfigured: false,
+    stdinEncKey: false,
   }
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -223,6 +233,9 @@ function parseArgs(args: string[]): ParsedArgs {
       case '--restrict-user':
         result.restrictUser = args[++i]
         break
+      case '--stdin-enc-key':
+        result.stdinEncKey = true
+        break
     }
   }
   return result
@@ -249,6 +262,22 @@ if (parsed.debug) {
 // ── Connection restrictions ───────────────────────────────────────────────────
 
 setRestrictions({ server: parsed.restrictServer, nick: parsed.restrictUser })
+
+// ── Encryption key initialization ─────────────────────────────────────────────
+
+let stdinPassphrase: string | undefined
+if (parsed.stdinEncKey) {
+  const rl = createInterface({ input: process.stdin, crlfDelay: Infinity })
+  stdinPassphrase = await new Promise<string>((resolve) =>
+    rl.once('line', (line) => {
+      rl.close()
+      resolve(line)
+    })
+  )
+}
+await keyManager.initialize(stdinPassphrase)
+const encWarning = keyManager.getWarning()
+if (encWarning) globalThis.__ENCRYPTION_WARNING__ = encWarning
 
 // ── Database path ─────────────────────────────────────────────────────────────
 
