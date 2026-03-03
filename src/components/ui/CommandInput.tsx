@@ -80,12 +80,7 @@ export function CommandInput({ width }: CommandInputProps) {
     [channelMessages]
   )
 
-  const getPrompt = () => {
-    if (currentChannel) return `[${currentChannel.name}] > `
-    if (currentPrivateChat) return `[@${currentPrivateChat.username}] > `
-    if (currentServer) return `[${currentServer.name}] > `
-    return '> '
-  }
+  const nick = currentServer?.nickname ?? ''
 
   const handleSubmit = async (rawText: string) => {
     const text = rawText.trim()
@@ -445,8 +440,8 @@ export function CommandInput({ width }: CommandInputProps) {
     }
   }, [errorMessage])
 
-  const prompt = getPrompt()
-  const promptWidth = prompt.length
+  // <nick>·  = nick.length + 3 chars; fallback ">·" = 2 chars
+  const promptWidth = nick ? nick.length + 3 : 2
   // 2 outer padding each side + 2 border chars + 1 inner paddingLeft = 7 fixed overhead
   const textareaWidth = Math.max(10, width - 7 - promptWidth)
   const visibleLines = Math.min(inputLineCount, 5)
@@ -472,9 +467,17 @@ export function CommandInput({ width }: CommandInputProps) {
         onMouseDown={selectedMessage ? () => setSelectedMessage(null) : undefined}
       >
         <box width={promptWidth} flexShrink={0} height={1}>
-          <text>
-            <span fg={THEME.accentBlue}>{prompt}</span>
-          </text>
+          {nick ? (
+            <text>
+              <span fg={THEME.dimText}>{'<'}</span>
+              <span fg={THEME.accent}>{nick}</span>
+              <span fg={THEME.dimText}>{'> '}</span>
+            </text>
+          ) : (
+            <text>
+              <span fg={THEME.dimText}>{'> '}</span>
+            </text>
+          )}
         </box>
         <textarea
           ref={textareaRef as React.RefObject<TextareaRenderable>}
