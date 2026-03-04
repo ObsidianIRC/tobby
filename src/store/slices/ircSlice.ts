@@ -2,10 +2,16 @@ import type { StateCreator } from 'zustand'
 import type { IRCClient, EventMap } from '@/utils/ircClient'
 import type { AppStore } from '@/store'
 import type { User } from '@/types'
-import { v4 as uuidv4 } from 'uuid'
+import { v4 as uuidv4, v5 as uuidv5 } from 'uuid'
 import { stripIrcFormatting } from '@irc/messageFormatter'
 import { getDatabase } from '@/services/database'
 import { createMessage } from '@/utils/messageFactory'
+
+// Must match ObsidianIRC/src/lib/ircClient.ts generateDeterministicId and bootstrapServer.ts
+const CHANNEL_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8'
+function deterministicChannelId(serverId: string, channelName: string): string {
+  return uuidv5(`${serverId}:${channelName}`, CHANNEL_NAMESPACE)
+}
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -323,7 +329,9 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       const server = getServer(data.serverId)
       if (!server) return
 
-      const channel = server.channels.find((c) => c.name === data.channelName)
+      const channel = server.channels.find(
+        (c) => c.name.toLowerCase() === data.channelName.toLowerCase()
+      )
       // For DMs the TAGMSG target is our own nick — find the private chat by the sender
       const privateChat = !channel
         ? server.privateChats.find((pc) => pc.username.toLowerCase() === data.sender.toLowerCase())
@@ -385,7 +393,9 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       const server = getServer(data.serverId)
       if (!server) return
 
-      const channel = server.channels.find((c) => c.name === data.channelName)
+      const channel = server.channels.find(
+        (c) => c.name.toLowerCase() === data.channelName.toLowerCase()
+      )
       if (!channel) return
 
       // Message received — sender is no longer typing
@@ -618,17 +628,45 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
 
     // User join
     ircClient.on('JOIN', (data: EventMap['JOIN']) => {
-      const { getServer, updateChannel } = get()
+      const { getServer, updateChannel, addChannel } = get()
       const server = getServer(data.serverId)
       if (!server) return
 
-      const channel = server.channels.find((c) => c.name === data.channelName)
+      let channel = server.channels.find(
+        (c) => c.name.toLowerCase() === data.channelName.toLowerCase()
+      )
+
+      if (
+        !channel &&
+        !data.batchTag &&
+        server.nickname &&
+        data.username.toLowerCase() === server.nickname.toLowerCase()
+      ) {
+        // Server-initiated self-join for a channel not in the store yet.
+        // This happens when a server-side bouncer (e.g. Ergo) auto-rejoins us to channels
+        // that aren't in the local DB. Create it on-the-fly so NAMES can populate the member list.
+        addChannel(data.serverId, {
+          id: deterministicChannelId(data.serverId, data.channelName),
+          name: data.channelName,
+          serverId: data.serverId,
+          topic: '',
+          users: [],
+          messages: [],
+          unreadCount: 0,
+          isPrivate: false,
+          isMentioned: false,
+        })
+        channel = get()
+          .getServer(data.serverId)
+          ?.channels.find((c) => c.name.toLowerCase() === data.channelName.toLowerCase())
+      }
+
       if (!channel) return
 
       // Historical events (chathistory batch replays) must NOT touch the live user list.
       // A historical self-JOIN would otherwise clear the users that 353 NAMES just populated.
       if (!data.batchTag) {
-        if (data.username === server.nickname) {
+        if (data.username.toLowerCase() === server.nickname.toLowerCase()) {
           // Real self-join: clear users so the incoming 353/NAMES events populate it cleanly
           updateChannel(data.serverId, channel.id, { users: [] })
           // Backfill accounts for all members via WHOX (once per join, if supported)
@@ -678,7 +716,9 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       const server = getServer(data.serverId)
       if (!server) return
 
-      const channel = server.channels.find((c) => c.name === data.channelName)
+      const channel = server.channels.find(
+        (c) => c.name.toLowerCase() === data.channelName.toLowerCase()
+      )
       if (!channel) return
 
       // Check if the user who parted is the current user (us)
@@ -803,7 +843,9 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       const server = getServer(data.serverId)
       if (!server) return
 
-      const channel = server.channels.find((c) => c.name === data.channelName)
+      const channel = server.channels.find(
+        (c) => c.name.toLowerCase() === data.channelName.toLowerCase()
+      )
       if (!channel) return
 
       updateChannel(data.serverId, channel.id, {
@@ -853,7 +895,9 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       const server = getServer(data.serverId)
       if (!server) return
 
-      const channel = server.channels.find((c) => c.name === data.channelName)
+      const channel = server.channels.find(
+        (c) => c.name.toLowerCase() === data.channelName.toLowerCase()
+      )
       if (!channel) return
 
       // Convert IRC User type to our User type
@@ -885,7 +929,9 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       const server = getServer(data.serverId)
       if (!server) return
 
-      const channel = server.channels.find((c) => c.name === data.channelName)
+      const channel = server.channels.find(
+        (c) => c.name.toLowerCase() === data.channelName.toLowerCase()
+      )
       if (!channel) return
 
       updateChannel(data.serverId, channel.id, {
@@ -898,7 +944,9 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       const server = getServer(data.serverId)
       if (!server) return
 
-      const channel = server.channels.find((c) => c.name === data.channelName)
+      const channel = server.channels.find(
+        (c) => c.name.toLowerCase() === data.channelName.toLowerCase()
+      )
       if (!channel) return
 
       updateChannel(data.serverId, channel.id, {
@@ -914,7 +962,7 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
         if (!server) return
 
         const channel = data.channelName
-          ? server.channels.find((c) => c.name === data.channelName)
+          ? server.channels.find((c) => c.name.toLowerCase() === data.channelName.toLowerCase())
           : undefined
 
         // For DMs: channelName is always undefined (base class only sets it for #channels).
@@ -1004,7 +1052,9 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
 
       // Check if this is a channel mode change
       if (data.target.startsWith('#')) {
-        const channel = server.channels.find((c) => c.name === data.target)
+        const channel = server.channels.find(
+          (c) => c.name.toLowerCase() === data.target.toLowerCase()
+        )
         if (!channel) return
 
         // Add system message

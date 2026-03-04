@@ -63,6 +63,11 @@ export function StatusBar({ width }: StatusBarProps) {
         )}
       </box>
       <box flexDirection="row" gap={2}>
+        {globalThis.__ENCRYPTION_WARNING__ && (
+          <text>
+            <span fg={THEME.warning}>⚠ no enc</span>
+          </text>
+        )}
         {messageSearch !== null && messageSearch.matchIds.length > 0 && (
           <text>
             <span fg={THEME.accentCyan}>

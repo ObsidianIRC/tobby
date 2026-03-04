@@ -22,6 +22,9 @@ class KeyManager {
     if (stdinPassphrase !== undefined) {
       if (stdinPassphrase) {
         this.key = pbkdf2Sync(stdinPassphrase, KDF_SALT, KDF_ITER, KDF_LEN, 'sha256')
+      } else {
+        this.warning =
+          'Empty passphrase received via --stdin-enc-key; passwords stored unencrypted.'
       }
       return
     }
