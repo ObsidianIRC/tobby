@@ -3,6 +3,7 @@ import { createRoot } from '@opentui/react'
 import { App } from './App'
 import fs from 'node:fs'
 import os from 'node:os'
+import tty from 'node:tty'
 import { createInterface } from 'node:readline'
 import { resolveDatabasePath } from './utils/paths'
 import { setDatabasePath } from './services/database'
@@ -329,8 +330,22 @@ if (parsed.server && !wantsSetup) {
 
 // ── Launch app ────────────────────────────────────────────────────────────────
 
+// When the passphrase was piped in via stdin, that fd is now at EOF and is no
+// longer a TTY. opentui checks `inp.isTTY` before enabling raw mode and palette
+// detection; if the check fails the TUI is completely broken. Reopen the
+// controlling terminal so opentui gets a real keyboard stream.
+let rendererStdin: tty.ReadStream | typeof process.stdin = process.stdin
+if (parsed.stdinEncKey && !process.stdin.isTTY) {
+  try {
+    rendererStdin = new tty.ReadStream(fs.openSync('/dev/tty', 'r+'))
+  } catch {
+    // No controlling terminal — TUI will degrade gracefully (opentui's own path).
+  }
+}
+
 const renderer = await createCliRenderer({
   exitOnCtrlC: false,
+  stdin: rendererStdin,
 })
 
 createRoot(renderer).render(<App />)

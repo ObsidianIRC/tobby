@@ -19,7 +19,13 @@ class KeyManager {
   }
 
   async initialize(stdinPassphrase?: string): Promise<void> {
-    const passphrase = stdinPassphrase ?? (await this.getOsPassphrase())
+    if (stdinPassphrase !== undefined) {
+      if (stdinPassphrase) {
+        this.key = pbkdf2Sync(stdinPassphrase, KDF_SALT, KDF_ITER, KDF_LEN, 'sha256')
+      }
+      return
+    }
+    const passphrase = await this.getOsPassphrase()
     if (!passphrase) {
       this.warning =
         'No encryption key available — passwords stored unencrypted. Use --stdin-enc-key or set up a system keyring (libsecret-tools on Linux, Keychain on macOS).'
@@ -90,23 +96,27 @@ class KeyManager {
 
   private linuxSecretTool(): string | null {
     // Requires libsecret-tools; gracefully returns null if not installed or daemon not running
-    const get = Bun.spawnSync(['secret-tool', 'lookup', 'service', SERVICE, 'account', ACCOUNT])
-    if (get.exitCode === 0) return get.stdout.toString().trim()
-    const passphrase = randomBytes(32).toString('hex')
-    const set = Bun.spawnSync(
-      [
-        'secret-tool',
-        'store',
-        '--label',
-        'tobby encryption key',
-        'service',
-        SERVICE,
-        'account',
-        ACCOUNT,
-      ],
-      { stdin: Buffer.from(passphrase, 'utf8') }
-    )
-    return set.exitCode === 0 ? passphrase : null
+    try {
+      const get = Bun.spawnSync(['secret-tool', 'lookup', 'service', SERVICE, 'account', ACCOUNT])
+      if (get.exitCode === 0) return get.stdout.toString().trim()
+      const passphrase = randomBytes(32).toString('hex')
+      const set = Bun.spawnSync(
+        [
+          'secret-tool',
+          'store',
+          '--label',
+          'tobby encryption key',
+          'service',
+          SERVICE,
+          'account',
+          ACCOUNT,
+        ],
+        { stdin: Buffer.from(passphrase, 'utf8') }
+      )
+      return set.exitCode === 0 ? passphrase : null
+    } catch {
+      return null
+    }
   }
 }
 

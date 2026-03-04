@@ -170,12 +170,19 @@ export class IRCClient extends BaseIRCClient {
           }
         }
 
-        // 433 — Nickname already in use, retry with _ suffix
+        // 433 — Nickname already in use
         if (bare.includes(' 433 ')) {
-          const currentNick = (this as any).nicks.get(server.id) as string
-          const newNick = currentNick + '_'
-          ;(this as any).nicks.set(server.id, newNick)
-          nodeSocket.send(`NICK ${newNick}`)
+          // Post-connection 433 means a voluntary NICK change failed — stay put.
+          if (!server.isConnected) {
+            const currentNick = (this as any).nicks.get(server.id) as string
+            const trailingUnderscores = (currentNick.match(/_+$/) ?? [''])[0].length
+            // Cap at 3 underscore suffixes to avoid growing forever during registration.
+            if (trailingUnderscores < 3) {
+              const newNick = currentNick + '_'
+              ;(this as any).nicks.set(server.id, newNick)
+              nodeSocket.send(`NICK ${newNick}`)
+            }
+          }
         }
 
         // Forward numeric replies and server NOTICEs as serverMessage events
