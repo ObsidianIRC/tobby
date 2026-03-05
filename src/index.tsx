@@ -21,6 +21,8 @@ declare global {
   var __SETUP_MODE__: boolean
   // Set when keyring is unavailable; surfaced by the UI as a warning.
   var __ENCRYPTION_WARNING__: string | undefined
+  // Set when --do-not-store-password is given; passwords are never written to DB.
+  var __DO_NOT_STORE_PASSWORD__: boolean | undefined
   // CLI-provided prefill values forwarded to the connect modal.
   var __CLI_PREFILL__:
     | { host?: string; port?: number; nick?: string; ssl?: boolean; channels?: string[] }
@@ -139,6 +141,11 @@ Options:
                      instead of using the OS keyring. Useful for headless
                      environments: echo "passphrase" | tobby --stdin-enc-key
 
+  --do-not-store-password
+                     Never write passwords or SASL credentials to the database.
+                     Passwords are held in memory only for the current session.
+                     NickServ will prompt for identification on each launch.
+
   --debug            Write a debug log to tobby-debug.log.
   --version, -v      Print version and exit.
   --help, -h         Show this help and exit.
@@ -188,7 +195,7 @@ interface ParsedArgs {
   restrictServer?: string
   restrictUser?: string
   stdinEncKey: boolean
-  fd3EncKey: boolean
+  doNotStorePassword: boolean
 }
 
 function parseArgs(args: string[]): ParsedArgs {
@@ -199,7 +206,7 @@ function parseArgs(args: string[]): ParsedArgs {
     setup: false,
     setupIfNotConfigured: false,
     stdinEncKey: false,
-    fd3EncKey: false,
+    doNotStorePassword: false,
   }
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -239,8 +246,8 @@ function parseArgs(args: string[]): ParsedArgs {
       case '--stdin-enc-key':
         result.stdinEncKey = true
         break
-      case '--fd3-enc-key':
-        result.fd3EncKey = true
+      case '--do-not-store-password':
+        result.doNotStorePassword = true
         break
     }
   }
@@ -271,22 +278,11 @@ setRestrictions({ server: parsed.restrictServer, nick: parsed.restrictUser })
 
 // ── Encryption key initialization ─────────────────────────────────────────────
 
+globalThis.__DO_NOT_STORE_PASSWORD__ = parsed.doNotStorePassword || undefined
+
 let stdinPassphrase: string | undefined
-let usedFd3 = false
-if (parsed.fd3EncKey) {
-  // Wrapper passes --fd3-enc-key and an anonymous pipe as fd 3.
-  // The pipe is never attached to the PTY so there is no echo risk.
-  const source = fs.createReadStream('', { fd: 3, autoClose: true })
-  const rl = createInterface({ input: source, output: null, crlfDelay: Infinity })
-  stdinPassphrase = await new Promise<string>((resolve) =>
-    rl.once('line', (line) => {
-      rl.close()
-      resolve(line)
-    })
-  )
-  usedFd3 = true
-} else if (parsed.stdinEncKey) {
-  const rl = createInterface({ input: process.stdin, output: null, crlfDelay: Infinity })
+if (parsed.stdinEncKey) {
+  const rl = createInterface({ input: process.stdin, crlfDelay: Infinity })
   stdinPassphrase = await new Promise<string>((resolve) =>
     rl.once('line', (line) => {
       rl.close()
@@ -353,10 +349,9 @@ if (parsed.server && !wantsSetup) {
 // detection; if the check fails the TUI is completely broken. Reopen the
 // controlling terminal so opentui gets a real keyboard stream.
 let rendererStdin: tty.ReadStream | typeof process.stdin = process.stdin
-if (parsed.stdinEncKey && !usedFd3 && !process.stdin.isTTY) {
+if (parsed.stdinEncKey && !process.stdin.isTTY) {
   // stdin was consumed reading the passphrase; reopen the controlling terminal
-  // so opentui gets a real keyboard stream. Not needed when fd 3 was used
-  // because stdin was never touched.
+  // so opentui gets a real keyboard stream.
   try {
     rendererStdin = new tty.ReadStream(fs.openSync('/dev/tty', 'r+'))
   } catch {

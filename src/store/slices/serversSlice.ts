@@ -35,16 +35,19 @@ export const createServersSlice: StateCreator<AppStore, [], [], ServersSlice> = 
     if (persist) {
       try {
         const db = getDatabase()
-        // Encrypt a copy before persisting; in-memory state keeps plaintext
-        const toPersist = keyManager.isAvailable()
-          ? {
-              ...server,
-              password: server.password ? keyManager.encrypt(server.password) : server.password,
-              saslPassword: server.saslPassword
-                ? keyManager.encrypt(server.saslPassword)
-                : server.saslPassword,
-            }
-          : server
+        // Encrypt a copy before persisting; in-memory state keeps plaintext.
+        // In no-store mode, passwords are never written to the database.
+        const toPersist = globalThis.__DO_NOT_STORE_PASSWORD__
+          ? { ...server, password: undefined, saslPassword: undefined }
+          : keyManager.isAvailable()
+            ? {
+                ...server,
+                password: server.password ? keyManager.encrypt(server.password) : server.password,
+                saslPassword: server.saslPassword
+                  ? keyManager.encrypt(server.saslPassword)
+                  : server.saslPassword,
+              }
+            : server
         db.saveServer(toPersist)
       } catch (error) {
         debugLog?.('Failed to persist server:', error)
@@ -65,6 +68,7 @@ export const createServersSlice: StateCreator<AppStore, [], [], ServersSlice> = 
         connectionState,
         channels: _ch,
         privateChats: _pc,
+        capabilities: _caps,
         saslPassword,
         saslUsername,
         ...rest
@@ -72,12 +76,16 @@ export const createServersSlice: StateCreator<AppStore, [], [], ServersSlice> = 
       const dbUpdates: Record<string, unknown> = { ...rest }
       // Remap camelCase fields to their snake_case column names
       if (saslUsername !== undefined) dbUpdates.sasl_account = saslUsername
-      if (saslPassword !== undefined) {
+      if (saslPassword !== undefined && !globalThis.__DO_NOT_STORE_PASSWORD__) {
         dbUpdates.sasl_password =
           keyManager.isAvailable() && saslPassword ? keyManager.encrypt(saslPassword) : saslPassword
       }
-      if (dbUpdates.password !== undefined && keyManager.isAvailable() && dbUpdates.password) {
-        dbUpdates.password = keyManager.encrypt(dbUpdates.password as string)
+      if (dbUpdates.password !== undefined) {
+        if (globalThis.__DO_NOT_STORE_PASSWORD__) {
+          delete dbUpdates.password
+        } else if (keyManager.isAvailable() && dbUpdates.password) {
+          dbUpdates.password = keyManager.encrypt(dbUpdates.password as string)
+        }
       }
       if (Object.keys(dbUpdates).length > 0) {
         db.updateServer(id, dbUpdates as any)

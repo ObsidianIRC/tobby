@@ -35,6 +35,7 @@ export function getDatabasePath(): string {
 }
 
 export function resolveDatabasePath(customPath: string): string {
+  if (customPath === ':memory:') return ':memory:'
   const resolved = path.resolve(customPath)
 
   if (fs.existsSync(resolved)) {

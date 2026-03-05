@@ -144,6 +144,7 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
     // Connection events
     ircClient.on('ready', (data: EventMap['ready']) => {
       const { updateServer, getServer, addChannel } = get()
+
       updateServer(data.serverId, {
         isConnected: true,
         connectionState: 'connected',
@@ -223,6 +224,7 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
           get().setModalError(data.text)
           return
         }
+
         addServerMessage(data.serverId, `[${data.command}] ${data.text}`)
       }
     )
@@ -961,8 +963,9 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
         const server = getServer(data.serverId)
         if (!server) return
 
-        const channel = data.channelName
-          ? server.channels.find((c) => c.name.toLowerCase() === data.channelName.toLowerCase())
+        const channelName = data.channelName
+        const channel = channelName
+          ? server.channels.find((c) => c.name.toLowerCase() === channelName.toLowerCase())
           : undefined
 
         // For DMs: channelName is always undefined (base class only sets it for #channels).
