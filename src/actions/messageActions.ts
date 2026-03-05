@@ -101,8 +101,15 @@ export function registerMessageActions(registry: ActionRegistry<AppStore>) {
           currentServer.capabilities ?? []
         )
       } else {
-        // Normal path: sendMessage handles \n-based multiline internally
-        ircClient.sendMessage(currentServer.id, currentChannel.id, content)
+        // Use channel name from store rather than ircClient.sendMessage() which
+        // requires the channel to exist in the IRC client's internal state.
+        // Bouncer-replayed channels are in Zustand but not in ircClient.server.channels.
+        const lines = content.split('\n')
+        if (lines.length > 1) {
+          ircClient.sendMultilineMessage(currentServer.id, currentChannel.name, lines)
+        } else {
+          ircClient.sendRaw(currentServer.id, `PRIVMSG ${currentChannel.name} :${content}`)
+        }
       }
 
       // Server will echo the message back via CHANMSG if echo-message is active
@@ -152,7 +159,7 @@ export function registerMessageActions(registry: ActionRegistry<AppStore>) {
 
       // Check if server supports multiline
       if (!currentServer.capabilities?.includes('draft/multiline')) {
-        ircClient.sendMessage(currentServer.id, currentChannel.id, content)
+        ircClient.sendRaw(currentServer.id, `PRIVMSG ${currentChannel.name} :${content}`)
         return
       }
 
@@ -203,7 +210,7 @@ export function registerMessageActions(registry: ActionRegistry<AppStore>) {
         )
       } else {
         const mention = `${selectedMessage.userId}: ${content}`
-        ircClient.sendMessage(currentServer.id, currentChannel.id, mention)
+        ircClient.sendRaw(currentServer.id, `PRIVMSG ${currentChannel.name} :${mention}`)
       }
 
       // Clear replying to state
