@@ -133,6 +133,8 @@ Options:
                      Only allow connecting to the given hostname. Any attempt
                      to connect to a different server (via dialog or /connect)
                      will be rejected with an error.
+  --restrict-port <port>
+                     Only allow connecting to the given port number.
   --restrict-user <nick>
                      Only allow using the given nickname. Trailing underscores
                      are permitted (server may append them on collision).
@@ -193,6 +195,7 @@ interface ParsedArgs {
   setup: boolean
   setupIfNotConfigured: boolean
   restrictServer?: string
+  restrictPort?: number
   restrictUser?: string
   stdinEncKey: boolean
   doNotStorePassword: boolean
@@ -240,6 +243,9 @@ function parseArgs(args: string[]): ParsedArgs {
       case '--restrict-server':
         result.restrictServer = args[++i]
         break
+      case '--restrict-port':
+        result.restrictPort = parseInt(args[++i]!, 10)
+        break
       case '--restrict-user':
         result.restrictUser = args[++i]
         break
@@ -274,7 +280,11 @@ if (parsed.debug) {
 
 // ── Connection restrictions ───────────────────────────────────────────────────
 
-setRestrictions({ server: parsed.restrictServer, nick: parsed.restrictUser })
+setRestrictions({
+  server: parsed.restrictServer,
+  port: parsed.restrictPort,
+  nick: parsed.restrictUser,
+})
 
 // ── Encryption key initialization ─────────────────────────────────────────────
 

@@ -5,6 +5,7 @@ import { FormModal } from './FormModal'
 import type { FormField } from './FormModal'
 import {
   checkServerRestriction,
+  checkPortRestriction,
   checkNickRestriction,
   getRestrictions,
 } from '../../utils/restrictions'
@@ -23,7 +24,7 @@ export function ConnectServerModal({ width, height }: ConnectServerModalProps) {
   // Prefill from --setup CLI args if present
   const prefill = globalThis.__CLI_PREFILL__
   const restrictions = getRestrictions()
-  const defaultPort = String(prefill?.port ?? 6697)
+  const defaultPort = String(restrictions.port ?? prefill?.port ?? 6697)
 
   const fields: FormField[] = [
     { key: 'name', label: 'Server Name', placeholder: 'My Server', defaultValue: prefill?.host },
@@ -35,7 +36,13 @@ export function ConnectServerModal({ width, height }: ConnectServerModalProps) {
       // Lock the field so the user cannot type a different host
       readOnly: !!restrictions.server,
     },
-    { key: 'port', label: 'Port', placeholder: '6697', defaultValue: defaultPort },
+    {
+      key: 'port',
+      label: 'Port',
+      placeholder: '6697',
+      defaultValue: defaultPort,
+      readOnly: !!restrictions.port,
+    },
     {
       key: 'nickname',
       label: 'Nickname',
@@ -62,6 +69,11 @@ export function ConnectServerModal({ width, height }: ConnectServerModalProps) {
     const serverErr = checkServerRestriction(values.host)
     if (serverErr) {
       setFormError(serverErr)
+      return
+    }
+    const portErr = checkPortRestriction(parseInt(values.port ?? '6697', 10) || 6697)
+    if (portErr) {
+      setFormError(portErr)
       return
     }
     const nickErr = checkNickRestriction(values.nickname)

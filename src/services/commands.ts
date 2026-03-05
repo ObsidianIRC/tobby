@@ -1,5 +1,9 @@
 import { v4 as uuidv4 } from 'uuid'
-import { checkServerRestriction, checkNickRestriction } from '@/utils/restrictions'
+import {
+  checkServerRestriction,
+  checkPortRestriction,
+  checkNickRestriction,
+} from '@/utils/restrictions'
 import { createMessage } from '@/utils/messageFactory'
 import type { ActionRegistry } from '@/actions'
 import type { ActionContext } from '@/types'
@@ -155,6 +159,8 @@ export class CommandParser {
         const [host, port = '6667', nickname] = args
         const serverErr = checkServerRestriction(host!)
         if (serverErr) return { success: false, message: serverErr }
+        const portErr = checkPortRestriction(parseInt(port, 10))
+        if (portErr) return { success: false, message: portErr }
         if (nickname) {
           const nickErr = checkNickRestriction(nickname)
           if (nickErr) return { success: false, message: nickErr }

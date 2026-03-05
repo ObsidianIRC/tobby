@@ -1,12 +1,12 @@
 declare global {
-  var __RESTRICTIONS__: { server?: string; nick?: string } | undefined
+  var __RESTRICTIONS__: { server?: string; nick?: string; port?: number } | undefined
 }
 
-export function setRestrictions(r: { server?: string; nick?: string }): void {
+export function setRestrictions(r: { server?: string; nick?: string; port?: number }): void {
   globalThis.__RESTRICTIONS__ = r
 }
 
-export function getRestrictions(): Readonly<{ server?: string; nick?: string }> {
+export function getRestrictions(): Readonly<{ server?: string; nick?: string; port?: number }> {
   return globalThis.__RESTRICTIONS__ ?? {}
 }
 
@@ -19,6 +19,18 @@ export function checkServerRestriction(host: string): string | null {
   if (!server) return null
   if (host.toLowerCase() !== server.toLowerCase()) {
     return `Server restricted to: ${server}`
+  }
+  return null
+}
+
+/**
+ * Returns an error string if `port` violates the port restriction, null if allowed.
+ */
+export function checkPortRestriction(port: number): string | null {
+  const restricted = globalThis.__RESTRICTIONS__?.port
+  if (!restricted) return null
+  if (port !== restricted) {
+    return `Port restricted to: ${restricted}`
   }
   return null
 }
