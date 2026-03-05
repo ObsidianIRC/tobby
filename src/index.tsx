@@ -188,6 +188,7 @@ interface ParsedArgs {
   restrictServer?: string
   restrictUser?: string
   stdinEncKey: boolean
+  fd3EncKey: boolean
 }
 
 function parseArgs(args: string[]): ParsedArgs {
@@ -198,6 +199,7 @@ function parseArgs(args: string[]): ParsedArgs {
     setup: false,
     setupIfNotConfigured: false,
     stdinEncKey: false,
+    fd3EncKey: false,
   }
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -237,6 +239,9 @@ function parseArgs(args: string[]): ParsedArgs {
       case '--stdin-enc-key':
         result.stdinEncKey = true
         break
+      case '--fd3-enc-key':
+        result.fd3EncKey = true
+        break
     }
   }
   return result
@@ -267,7 +272,20 @@ setRestrictions({ server: parsed.restrictServer, nick: parsed.restrictUser })
 // ── Encryption key initialization ─────────────────────────────────────────────
 
 let stdinPassphrase: string | undefined
-if (parsed.stdinEncKey) {
+let usedFd3 = false
+if (parsed.fd3EncKey) {
+  // Wrapper passes --fd3-enc-key and an anonymous pipe as fd 3.
+  // The pipe is never attached to the PTY so there is no echo risk.
+  const source = fs.createReadStream('', { fd: 3, autoClose: true })
+  const rl = createInterface({ input: source, output: null, crlfDelay: Infinity })
+  stdinPassphrase = await new Promise<string>((resolve) =>
+    rl.once('line', (line) => {
+      rl.close()
+      resolve(line)
+    })
+  )
+  usedFd3 = true
+} else if (parsed.stdinEncKey) {
   const rl = createInterface({ input: process.stdin, output: null, crlfDelay: Infinity })
   stdinPassphrase = await new Promise<string>((resolve) =>
     rl.once('line', (line) => {
@@ -335,7 +353,10 @@ if (parsed.server && !wantsSetup) {
 // detection; if the check fails the TUI is completely broken. Reopen the
 // controlling terminal so opentui gets a real keyboard stream.
 let rendererStdin: tty.ReadStream | typeof process.stdin = process.stdin
-if (parsed.stdinEncKey && !process.stdin.isTTY) {
+if (parsed.stdinEncKey && !usedFd3 && !process.stdin.isTTY) {
+  // stdin was consumed reading the passphrase; reopen the controlling terminal
+  // so opentui gets a real keyboard stream. Not needed when fd 3 was used
+  // because stdin was never touched.
   try {
     rendererStdin = new tty.ReadStream(fs.openSync('/dev/tty', 'r+'))
   } catch {
