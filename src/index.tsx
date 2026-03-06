@@ -27,9 +27,12 @@ declare global {
   var __CLI_PREFILL__:
     | { host?: string; port?: number; nick?: string; ssl?: boolean; channels?: string[] }
     | undefined
+  // OAuth bearer token injected by sshland via OAUTH_BEARER_TOKEN env var.
+  var __OAUTH_BEARER_TOKEN__: string | undefined
 }
 
 globalThis.__APP_VERSION__ = '0.1.0'
+globalThis.__OAUTH_BEARER_TOKEN__ = process.env.OAUTH_BEARER_TOKEN || undefined
 
 // ── Fix Bun.stringWidth for ZWJ emoji sequences ───────────────────────────────
 // Bun.stringWidth counts each component of a ZWJ sequence separately
@@ -324,6 +327,11 @@ if (parsed.setupIfNotConfigured) {
       )
     : allServers.length > 0
   wantsSetup = !alreadyConfigured
+}
+
+// OAuth token present → skip connect dialog, auto-bootstrap with injected credentials
+if (wantsSetup && globalThis.__OAUTH_BEARER_TOKEN__) {
+  wantsSetup = false
 }
 
 globalThis.__SETUP_MODE__ = wantsSetup

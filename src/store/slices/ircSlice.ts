@@ -305,12 +305,13 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       // If the server acknowledged `sasl` and this server has SASL credentials, start
       // the AUTHENTICATE handshake.  The base class already holds CAP END until SASL
       // completes (903/904), so we only need to send the mechanism request here.
-      if (
-        caps.some((c) => c.split('=')[0] === 'sasl') &&
-        server.saslUsername &&
-        server.saslPassword
-      ) {
-        ircClient.sendRaw(data.serverId, 'AUTHENTICATE PLAIN')
+      if (caps.some((c) => c.split('=')[0] === 'sasl')) {
+        const oauthToken = globalThis.__OAUTH_BEARER_TOKEN__
+        if (oauthToken) {
+          ircClient.sendRaw(data.serverId, 'AUTHENTICATE OAUTHBEARER')
+        } else if (server.saslUsername && server.saslPassword) {
+          ircClient.sendRaw(data.serverId, 'AUTHENTICATE PLAIN')
+        }
       }
     })
 
@@ -318,13 +319,22 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
     ircClient.on('AUTHENTICATE', (data: EventMap['AUTHENTICATE']) => {
       if (data.param !== '+') return
       const server = get().getServer(data.serverId)
-      if (!server?.saslUsername || !server?.saslPassword) return
-      const payload = Buffer.from(
-        `${server.saslUsername}\x00${server.saslUsername}\x00${server.saslPassword}`
-      ).toString('base64')
-      ircClient.sendRaw(data.serverId, `AUTHENTICATE ${payload}`)
-    })
+      if (!server) return
 
+      const oauthToken = globalThis.__OAUTH_BEARER_TOKEN__
+      if (oauthToken) {
+        const nick = server.nickname || server.saslUsername || ''
+        const gs2 = `n,a=${nick},\x01host=${server.host}\x01port=${server.port}\x01auth=Bearer ${oauthToken}\x01\x01`
+        const payload = Buffer.from(gs2).toString('base64')
+        ircClient.sendRaw(data.serverId, `AUTHENTICATE ${payload}`)
+      } else {
+        if (!server.saslUsername || !server.saslPassword) return
+        const payload = Buffer.from(
+          `${server.saslUsername}\x00${server.saslUsername}\x00${server.saslPassword}`
+        ).toString('base64')
+        ircClient.sendRaw(data.serverId, `AUTHENTICATE ${payload}`)
+      }
+    })
     // Typing notifications and reactions
     ircClient.on('TAGMSG', (data: EventMap['TAGMSG']) => {
       const { getServer, setTypingUser, clearTypingUser, updateMessage, messages } = get()
