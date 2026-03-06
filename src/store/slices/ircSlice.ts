@@ -188,6 +188,16 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
           })
         }
       }
+
+      // After OAUTHBEARER auth the server may have assigned a suffixed nick (e.g. "nick_")
+      // if the desired nick was already in use. Re-send NICK now that we are authenticated
+      // so the server can re-evaluate and grant the canonical nick.
+      if (globalThis.__OAUTH_BEARER_TOKEN__) {
+        const desiredNick = data.nickname.replace(/_+$/, '')
+        if (desiredNick && desiredNick !== data.nickname) {
+          ircClient.sendRaw(data.serverId, `NICK ${desiredNick}`)
+        }
+      }
     })
 
     ircClient.on('connectionStateChange', (data: EventMap['connectionStateChange']) => {
@@ -315,13 +325,23 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
       }
     })
 
-    // Respond to AUTHENTICATE + with PLAIN credentials (saslUsername\0saslUsername\0saslPassword)
+    // Respond to AUTHENTICATE challenges for PLAIN and OAUTHBEARER SASL mechanisms.
     ircClient.on('AUTHENTICATE', (data: EventMap['AUTHENTICATE']) => {
-      if (data.param !== '+') return
+      const oauthToken = globalThis.__OAUTH_BEARER_TOKEN__
+
+      if (data.param !== '+') {
+        // A non-'+' challenge during OAUTHBEARER is the RFC 7628 error-channel response
+        // (a base64-encoded JSON error object). Per GS2 the client must reply with a
+        // single 0x01 byte (AQ== in base64) to cleanly terminate the failed exchange.
+        if (oauthToken) {
+          ircClient.sendRaw(data.serverId, 'AUTHENTICATE AQ==')
+        }
+        return
+      }
+
       const server = get().getServer(data.serverId)
       if (!server) return
 
-      const oauthToken = globalThis.__OAUTH_BEARER_TOKEN__
       if (oauthToken) {
         const nick = server.nickname || server.saslUsername || ''
         const gs2 = `n,a=${nick},\x01host=${server.host}\x01port=${server.port}\x01auth=Bearer ${oauthToken}\x01\x01`
@@ -655,8 +675,9 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
         data.username.toLowerCase() === server.nickname.toLowerCase()
       ) {
         // Server-initiated self-join for a channel not in the store yet.
-        // This happens when a server-side bouncer (e.g. Ergo) auto-rejoins us to channels
-        // that aren't in the local DB. Create it on-the-fly so NAMES can populate the member list.
+        // Server-initiated self-join for a channel not yet in the local store — e.g. when
+        // a server-side bouncer auto-rejoins sessions. Create it on-the-fly so the
+        // subsequent NAMES reply can populate the member list.
         addChannel(data.serverId, {
           id: deterministicChannelId(data.serverId, data.channelName),
           name: data.channelName,
@@ -807,7 +828,7 @@ export const createIRCSlice: StateCreator<AppStore, [], [], IRCSlice> = (set, ge
     // Backfill account fields from WHOX (354) replies
     ircClient.on('WHOX_REPLY', (data: EventMap['WHOX_REPLY']) => {
       const { updateUserAccount } = get()
-      // '*' = not identified (standard), '0' = not identified (Ergo/some servers)
+      // '*' = not identified (standard per WHOX); some servers use '0' for the same
       const account =
         data.account === '*' || data.account === '0' ? undefined : data.account || undefined
       updateUserAccount(data.serverId, data.nick, account)

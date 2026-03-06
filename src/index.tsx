@@ -27,7 +27,7 @@ declare global {
   var __CLI_PREFILL__:
     | { host?: string; port?: number; nick?: string; ssl?: boolean; channels?: string[] }
     | undefined
-  // OAuth bearer token injected by sshland via OAUTH_BEARER_TOKEN env var.
+  // OAuth bearer token optionally injected via OAUTH_BEARER_TOKEN env var.
   var __OAUTH_BEARER_TOKEN__: string | undefined
 }
 
@@ -329,7 +329,7 @@ if (parsed.setupIfNotConfigured) {
   wantsSetup = !alreadyConfigured
 }
 
-// OAuth token present → skip connect dialog, auto-bootstrap with injected credentials
+// When an OAuth token is available the server args are already known, so skip the setup dialog.
 if (wantsSetup && globalThis.__OAUTH_BEARER_TOKEN__) {
   wantsSetup = false
 }

@@ -9,6 +9,11 @@ export function deterministicChannelId(serverId: string, channelName: string): s
   return uuidv5(`${serverId}:${channelName}`, CHANNEL_NAMESPACE)
 }
 
+// Placeholder stored as saslPassword so the IRC client requests the `sasl` capability.
+// The AUTHENTICATE handler detects the OAuth token and uses OAUTHBEARER instead,
+// so this value is never sent to the server as an actual password.
+const OAUTH_SASL_SENTINEL = '__oauth_bearer__'
+
 interface CliServerArgs {
   host: string
   port: number
@@ -46,6 +51,12 @@ export function bootstrapServer(args: CliServerArgs): void {
     connectionState: 'disconnected',
     channels: [],
     privateChats: [],
+    // When an OAuth token is present, populate saslUsername/saslPassword so the
+    // IRC client includes `sasl` in CAP REQ. The actual AUTHENTICATE exchange
+    // uses OAUTHBEARER — the placeholder password is never transmitted.
+    ...(globalThis.__OAUTH_BEARER_TOKEN__
+      ? { saslUsername: args.nick, saslPassword: OAUTH_SASL_SENTINEL }
+      : {}),
   }
   db.saveServer(server)
 
